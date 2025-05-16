@@ -1,11 +1,9 @@
 import Fastify from 'fastify'
-import FastifyVite from '@fastify/vite'
 import { CdpClient } from '@coinbase/cdp-sdk'
 import dotenv from 'dotenv'
 import { readFile } from 'fs/promises'
 import * as ethers from 'ethers'
 import { Client } from "@gradio/client"
-import path from 'path'
 
 // Initialize app and setup
 async function initializeApp() {
@@ -21,7 +19,7 @@ async function initializeApp() {
   dotenv.config()
 
   // Read the campaign factory artifact
-  const campaignArtifact = JSON.parse(await readFile(path.join(__dirname, '../src/contracts/Campaign.sol/Campaign.json'), 'utf-8'))
+  const campaignArtifact = JSON.parse(await readFile('./src/contracts/Campaign.sol/Campaign.json', 'utf-8'))
 
   // Initialize CDP client
   const cdpClient = new CdpClient({
@@ -30,23 +28,10 @@ async function initializeApp() {
     walletSecret: process.env.CDP_WALLET_SECRET,
   })
 
-  await app.register(FastifyVite, {
-    root: __dirname,
-    renderer: '@fastify/react',
-    build: {
-      outDir: path.join(__dirname, 'dist'),
-      assetsDir: 'assets',
-      emptyOutDir: true,
-      manifest: true
-    }
-  })
-
   app.setErrorHandler((error, req, reply) => {
     console.error(error)
     reply.send({ error })
   })
-
-  await app.vite.ready()
 
   // SafeCap Campaign storage
   app.decorate('db', {
