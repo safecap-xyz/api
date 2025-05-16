@@ -19,10 +19,19 @@ const app = Fastify({
 
 // Register CORS plugin
 await app.register(import('@fastify/cors'), {
-  origin: ['http://localhost:5173', 'http://localhost:3000', 'https://www.safecap.xyz'],
+  origin: ['http://localhost:5173', 'http://localhost:3000', 'https://www.safecap.xyz', 'https://safecap.xyz'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
   exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+  logLevel: 'debug'
+})
+
+// Log CORS settings
+console.log('CORS Configuration:', {
+  origin: ['http://localhost:5173', 'http://localhost:3000', 'https://www.safecap.xyz', 'https://safecap.xyz'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
+  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar']
 })
 
 // SafeCap Campaign storage (would be replaced with blockchain interactions in production)
