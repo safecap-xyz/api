@@ -19,7 +19,7 @@ const app = Fastify({
 
 // Register CORS plugin
 await app.register(import('@fastify/cors'), {
-  origin: ['http://localhost:5173', 'http://localhost:3000'],
+  origin: ['http://localhost:5173', 'http://localhost:3000', 'https://safecap.xyz'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
   exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
