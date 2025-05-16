@@ -1,6 +1,7 @@
 import Fastify from 'fastify'
 import { CdpClient } from '@coinbase/cdp-sdk'
 import dotenv from 'dotenv'
+import { Client } from "@gradio/client"
 
 // Load environment variables
 dotenv.config()
@@ -141,6 +142,51 @@ app.post('/api/send-user-operation', async (req, reply) => {
   } catch (error) {
     console.error('Error sending user operation:', error);
     reply.code(500).send({ error: error.message || 'Failed to send user operation' });
+  }
+});
+
+app.post('/api/generate-image', async (req, reply) => {
+  try {
+    // Validate request body
+    const { refImageUrl1, refImageUrl2, prompt } = req.body;
+    if (!refImageUrl1 || !refImageUrl2 || !prompt) {
+      return reply.code(400).send({ error: 'Missing required fields: refImageUrl1, refImageUrl2, prompt' });
+    }
+
+    // Fetch reference images
+    const refImage1Blob = await (await fetch(refImageUrl1)).blob();
+    const refImage2Blob = await (await fetch(refImageUrl2)).blob();
+
+    // Initialize Gradio client
+    const client = await Client.connect("ByteDance/DreamO");
+
+    // Call Gradio predict API
+    const result = await client.predict("/generate_image", {
+      ref_image1: refImage1Blob,
+      ref_image2: refImage2Blob,
+      ref_task1: "id", // Default
+      ref_task2: "ip", // Default
+      prompt: prompt,
+      seed: 7698454872441022867, // Default
+      width: 1024,             // Default
+      height: 1024,            // Default
+      ref_res: 512,            // Default
+      num_steps: 12,           // Default
+      guidance: 3.5,           // Default
+      true_cfg: 1,             // Default
+      cfg_start_step: 0,       // Default
+      cfg_end_step: 0,         // Default
+      neg_prompt: "",          // Default
+      neg_guidance: 1,         // Default
+      first_step_guidance: 0,  // Default
+    });
+
+    // Send response
+    reply.send(result.data);
+
+  } catch (error) {
+    app.log.error(error);
+    reply.code(500).send({ error: 'Failed to generate image', details: error.message });
   }
 });
 
