@@ -51,6 +51,142 @@ app.decorate('db', {
   ]
 })
 
+server.post('/api/sample-user-operation', async (req, reply) => {
+  const { network = 'base-sepolia' } = req.body;
+
+  try {
+    console.log(`Testing sample user operation on network: ${network}`);
+
+    // Use the sample data format that worked in the CDP SDK Wallet Toolkit
+    // Create a new owner account
+    const ownerName = `owner${Date.now().toString().slice(-5)}`;
+    const owner = await cdpClient.evm.createAccount({
+      name: ownerName,
+      type: 'evm-server'
+    });
+    console.log(`Created owner account: ${owner.address}`);
+
+    // Create a smart account
+    const smartAccount = await cdpClient.evm.createSmartAccount({
+      owner,
+      network
+    });
+    console.log(`Created smart account: ${smartAccount.address}`);
+
+    // Prepare contract deployment calls
+
+    console.log('Sending user operation with processed contract data...');
+    // Load Campaign bytecode from JSON file
+    const campaignBytecode = campaignArtifact.bytecode;
+    console.log('Loading Campaign bytecode from JSON file');
+    console.log(`Bytecode length: ${campaignBytecode.length} bytes`);
+
+    // Create the call data for contract deployment with constructor arguments
+    const nftContractAddress = '0x1234567890123456789012345678901234567890'; // Placeholder NFT contract address
+    const initialOwner = smartAccount.address; // Use our smart account as initial owner
+
+    // Encode constructor arguments using ethers v6 AbiCoder
+    const abiCoder = new ethers.AbiCoder();
+    const constructorArgs = abiCoder.encode(
+      ['address', 'address'],
+      [nftContractAddress, initialOwner]
+    );
+
+    const callData = {
+      to: '0x4c3bE7476AA6dEdD676063EFAA0229EF813735B4', // Deploying new contract
+      value: '0',
+      data: campaignBytecode + constructorArgs.slice(2) // Append constructor args to bytecode
+    };
+
+    // Send the user operation with the deployment call
+    const result = await smartAccount.sendUserOperation({
+      calls: [callData],
+      network
+    });
+
+    console.log('UserOperation sent, userOpHash:', result.userOpHash);
+    console.log('Waiting for UserOperation receipt...');
+
+    let userOpReceipt = null;
+    const maxAttempts = 20; // Poll for 20 * 3 = 60 seconds
+    const pollInterval = 3000; // 3 seconds
+
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        userOpReceipt = await cdpClient.evm.getUserOperation({
+          smartAccount: smartAccount,
+          userOpHash: result.userOpHash,
+        });
+        if (userOpReceipt && userOpReceipt.status === 'complete' && userOpReceipt.success) {
+          console.log('UserOperation was successful:', userOpReceipt);
+          break;
+        }
+      } catch (error) {
+        console.warn(`Attempt ${i + 1} to get receipt failed:`, error.message);
+      }
+      if (i < maxAttempts - 1) {
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+      }
+    }
+
+    let deployedContractAddress = null;
+    let actualTransactionHash = result.transactionHash; // Fallback
+
+    if (userOpReceipt && userOpReceipt.success) {
+      console.log('UserOperation was successful.');
+      // Get nonce from provider
+      const provider = new ethers.JsonRpcProvider(network.rpcUrl);
+      const nonce = await provider.getTransactionCount(smartAccount.address);
+
+      deployedContractAddress = ethers.utils.getContractAddress({
+        from: smartAccount.address,
+        nonce
+      });
+
+      console.log('=== Deployed Contract Address (Calculated) ===');
+      console.log('Deployed CampaignFactory Address:', deployedContractAddress);
+
+      if (userOpReceipt.receipt && userOpReceipt.receipt.transactionHash) {
+        actualTransactionHash = userOpReceipt.receipt.transactionHash;
+        console.log('Actual on-chain transaction hash:', actualTransactionHash);
+      }
+
+    } else if (userOpReceipt) {
+      console.error('UserOperation failed. Receipt:', userOpReceipt);
+    } else {
+      console.error('Failed to get UserOperation receipt after multiple attempts.');
+    }
+
+    console.log('=== Contract Deployment Details (from original callData) ===');
+    console.log('  To:', callData.to);
+    console.log('  Value:', callData.value);
+    console.log('  Data (bytecode) length:', callData.data.length);
+
+    // The `processedCalls` in this context is just the single deployment call
+    const effectiveProcessedCalls = [callData];
+
+    reply.send({
+      success: true,
+      ownerAddress: owner.address,
+      smartAccountAddress: smartAccount.address,
+      userOpHash: result.userOpHash,
+      transactionHash: actualTransactionHash, // Use the one from receipt if available
+      deployedContractAddress: deployedContractAddress, // Include the calculated address
+      processedCalls: effectiveProcessedCalls,
+      trackingInfo: {
+        network,
+        blockExplorerUrl: network === 'base-sepolia'
+          ? `https://sepolia.basescan.org/tx/${actualTransactionHash}`
+          : `https://basescan.org/tx/${actualTransactionHash}`
+      },
+      note: `Contract deployment initiated. Calculated Address: ${deployedContractAddress || 'N/A'}. Check the blockExplorerUrl with the transaction hash. For source code to appear on BaseScan, you must verify it on their platform after deployment.`
+    });
+  } catch (error) {
+    console.error('Error sending sample user operation:', error);
+    reply.code(500).send({ error: error.message || 'Failed to send sample user operation' });
+  }
+});
+
 // API Routes for SafeCap
 app.get('/api/campaigns', (req, reply) => {
   reply.send(app.db.campaigns)
