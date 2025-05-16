@@ -9,7 +9,7 @@ import { Client } from "@gradio/client"
 dotenv.config()
 
 // Read the campaign factory artifact
-const campaignArtifact = JSON.parse(await readFile(new URL('./src/contracts/Campaign.sol/Campaign.json', import.meta.url), 'utf-8'))
+const campaignArtifact = JSON.parse(await readFile('./src/contracts/Campaign.sol/Campaign.json', 'utf-8'))
 
 const app = Fastify({
   logger: {
