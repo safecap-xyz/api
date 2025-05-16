@@ -60,7 +60,7 @@ app.decorate('db', {
   ]
 })
 
-server.post('/api/sample-user-operation', async (req, reply) => {
+app.post('/api/sample-user-operation', async (req, reply) => {
   const { network = 'base-sepolia' } = req.body;
 
   try {
@@ -198,6 +198,8 @@ server.post('/api/sample-user-operation', async (req, reply) => {
 
 // API Routes for SafeCap
 app.get('/api/campaigns', (req, reply) => {
+  console.log('CORS headers:', reply.headers());
+  reply.send(app.db.campaigns)
   reply.send(app.db.campaigns)
 })
 
