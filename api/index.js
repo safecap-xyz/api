@@ -18,10 +18,11 @@ const app = Fastify({
 })
 
 // Register CORS plugin
-await app.register(import('@fastify/cors'), {
-  origin: ['http://localhost:5173', 'http://localhost:3000'], // Add your frontend URLs here
+await app.register(import('cors'), {
+  origin: ['http://localhost:5173', 'http://localhost:3000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
+  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
 })
 
 // SafeCap Campaign storage (would be replaced with blockchain interactions in production)
