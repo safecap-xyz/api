@@ -2,6 +2,8 @@ import Fastify from 'fastify'
 import { CdpClient } from '@coinbase/cdp-sdk'
 import dotenv from 'dotenv'
 import { Client } from "@gradio/client"
+import { ethers } from 'ethers'
+import campaignArtifact from './artifacts/Campaign.json'
 
 // Load environment variables
 dotenv.config()
