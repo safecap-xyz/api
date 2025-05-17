@@ -36,6 +36,23 @@ console.log('CORS Configuration:', {
   exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar']
 })
 
+// Network configuration
+const NETWORK_CONFIG = {
+  'base-mainnet': {
+    rpcUrl: process.env.ALCHEMY_BASE_MAINNET_URL || 'https://mainnet.base.org',
+    blockExplorerUrl: 'https://basescan.org',
+    chainId: 8453
+  },
+  'base-sepolia': {
+    rpcUrl: process.env.ALCHEMY_BASE_SEPOLIA_URL || 'https://sepolia.base.org',
+    blockExplorerUrl: 'https://sepolia.basescan.org',
+    chainId: 84532
+  }
+};
+
+// Get default network from environment or use 'base-mainnet' as fallback
+const DEFAULT_NETWORK = process.env.DEFAULT_NETWORK || 'base-mainnet';
+
 // SafeCap Campaign storage (would be replaced with blockchain interactions in production)
 app.decorate('db', {
   campaigns: [
@@ -63,7 +80,12 @@ app.decorate('db', {
 })
 
 app.post('/api/sample-user-operation', async (req, reply) => {
-  const { network = 'base-sepolia' } = req.body;
+  const { network = DEFAULT_NETWORK } = req.body;
+  const networkConfig = NETWORK_CONFIG[network];
+  
+  if (!networkConfig) {
+    return reply.code(400).send({ error: `Unsupported network: ${network}. Supported networks: ${Object.keys(NETWORK_CONFIG).join(', ')}` });
+  }
 
   try {
     console.log(`Testing sample user operation on network: ${network}`);
@@ -186,9 +208,7 @@ app.post('/api/sample-user-operation', async (req, reply) => {
       processedCalls: effectiveProcessedCalls,
       trackingInfo: {
         network,
-        blockExplorerUrl: network === 'base-sepolia'
-          ? `https://sepolia.basescan.org/tx/${actualTransactionHash}`
-          : `https://basescan.org/tx/${actualTransactionHash}`
+        blockExplorerUrl: `${networkConfig.blockExplorerUrl}/tx/${actualTransactionHash}`,
       },
       note: `Contract deployment initiated. Calculated Address: ${deployedContractAddress || 'N/A'}. Check the blockExplorerUrl with the transaction hash. For source code to appear on BaseScan, you must verify it on their platform after deployment.`
     });
@@ -262,7 +282,12 @@ app.get('/api/list-accounts', async (req, reply) => {
 
 app.post('/api/send-user-operation', async (req, reply) => {
   try {
-    const { smartAccountAddress, network = 'base-sepolia', calls, ownerAddress } = req.body;
+    const { smartAccountAddress, network = DEFAULT_NETWORK, calls, ownerAddress } = req.body;
+    const networkConfig = NETWORK_CONFIG[network];
+    
+    if (!networkConfig) {
+      return reply.code(400).send({ error: `Unsupported network: ${network}. Supported networks: ${Object.keys(NETWORK_CONFIG).join(', ')}` });
+    }
 
     if (!smartAccountAddress) {
       return reply.code(400).send({ error: 'Smart account address is required' });
