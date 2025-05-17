@@ -3,7 +3,13 @@ import { CdpClient } from '@coinbase/cdp-sdk'
 import dotenv from 'dotenv'
 import { Client } from "@gradio/client"
 import { ethers } from 'ethers'
-import campaignArtifact from './artifacts/Campaign.json'
+import { readFile } from 'fs/promises';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const campaignArtifact = JSON.parse(await readFile(join(__dirname, 'artifacts', 'Campaign.json'), 'utf-8'));
 
 // Load environment variables
 dotenv.config()
