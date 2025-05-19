@@ -559,9 +559,10 @@ const startServer = async (): Promise<string> => {
       // In development, allow all origins
       origin: process.env.NODE_ENV === 'production' 
         ? [
-            'https://your-production-domain.com',
-            'https://www.your-production-domain.com',
-            // Add other production domains as needed
+            'https://safecap.xyz',
+            'https://www.safecap.xyz',
+            'http://localhost:3000',  // For local development
+            'http://localhost:5173'   // Common Vite dev server port
           ]
         : true, // Allow all in non-production
       
@@ -577,21 +578,25 @@ const startServer = async (): Promise<string> => {
         'Authorization',
         'X-Request-Id',
         'X-Forwarded-For',
-        'X-Real-IP'
+        'X-Real-IP',
+        'Content-Length',
+        'Accept-Encoding'
       ],
       
       // Exposed response headers
       exposedHeaders: [
         'Content-Length',
         'Content-Range',
-        'X-Total-Count'
+        'X-Total-Count',
+        'X-Request-Id',
+        'Authorization'
       ],
       
       // Allow credentials (cookies, authorization headers)
       credentials: true,
       
-      // Cache preflight requests for 24 hours
-      maxAge: 86400,
+      // Cache preflight requests for 1 hour (3600 seconds)
+      maxAge: 3600,
       
       // Don't pass the CORS preflight response to the route handler
       preflightContinue: false,
@@ -624,7 +629,7 @@ const startServer = async (): Promise<string> => {
     });
 
     console.log(`\n🚀 Server started successfully`);
-    console.log(`   - Environment: ${isDevelopment ? 'development' : 'production'}`);
+    console.log(`   - Environment: ${process.env.NODE_ENV === 'development' ? 'development' : 'production'}`);
     console.log(`   - Node version: ${process.version}`);
     console.log(`   - CDP Client: ${cdpClient ? '✅ Initialized' : '❌ Not available'}`);
     console.log(`   - API Documentation: ${address}/documentation\n`);
