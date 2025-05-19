@@ -1,6 +1,20 @@
-import { AgentKit } from '@coinbase/agentkit';
+import { AgentKit, CdpV2EvmWalletProvider } from '@coinbase/agentkit';
 import { CdpClient } from '@coinbase/cdp-sdk';
-import { CdpV2EvmWalletProvider } from '@coinbase/agentkit';
+import { ethers } from 'ethers';
+
+// Re-export types for convenience
+export type { AgentKit, CdpV2EvmWalletProvider };
+
+// Type for the network information
+interface NetworkInfo {
+  chainId: string; // Using string to avoid bigint serialization issues
+  name: string;
+  isTestnet: boolean;
+  chainIdNumber: number; // For backward compatibility
+}
+
+// Type alias for better readability
+type JsonRpcProvider = ethers.JsonRpcProvider;
 
 // Define interfaces for account types since they're not directly exported
 interface EvmAccount {
@@ -134,6 +148,80 @@ class AgentKitService implements IAgentKitService {
     } catch (error) {
       console.error(`Error executing action ${action}:`, error);
       throw new Error(`Failed to execute action ${action}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private getProvider(): ethers.JsonRpcProvider {
+    if (!process.env.RPC_URL) {
+      throw new Error('RPC_URL environment variable is not set');
+    }
+    return new ethers.JsonRpcProvider(process.env.RPC_URL);
+  }
+
+  /**
+   * Gets the current network information
+   * @returns Network information including chain ID and name
+   */
+  async getNetworkInfo(): Promise<NetworkInfo> {
+    try {
+      const provider = this.getProvider();
+      const network = await provider.getNetwork();
+      const chainId = network.chainId.toString();
+      const chainIdNum = Number(network.chainId);
+      return {
+        chainId,
+        chainIdNumber: chainIdNum,
+        name: network.name,
+        isTestnet: chainId !== '1' // Compare as strings
+      };
+    } catch (error) {
+      console.error('Error getting network info:', error);
+      throw new Error(`Failed to get network info: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Gets the current gas price from the network
+   * @returns Current gas price in wei
+   */
+  async getGasPrice(): Promise<{
+    gasPrice: string; // Return as string to avoid bigint serialization issues
+    formatted: string;
+  }> {
+    try {
+      const provider = this.getProvider();
+      const feeData = await provider.getFeeData();
+      if (!feeData.gasPrice) {
+        throw new Error('Failed to get gas price');
+      }
+      if (!feeData.gasPrice) {
+        throw new Error('Failed to get gas price');
+      }
+      return {
+        gasPrice: feeData.gasPrice.toString(),
+        formatted: `${ethers.formatEther(feeData.gasPrice)} ETH`
+      };
+    } catch (error) {
+      console.error('Error getting gas price:', error);
+      throw new Error(`Failed to get gas price: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Gets the current block number
+   * @returns Current block number
+   */
+  /**
+   * Gets the current block number from the blockchain
+   * @returns The current block number as a number
+   */
+  async getBlockNumber(): Promise<number> {
+    try {
+      const provider = this.getProvider();
+      return await provider.getBlockNumber();
+    } catch (error) {
+      console.error('Error getting block number:', error);
+      throw new Error(`Failed to get block number: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

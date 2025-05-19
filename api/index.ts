@@ -249,6 +249,48 @@ app.get('/api/agentkit/account', async (req: FastifyRequest, reply: FastifyReply
   }
 });
 
+// Get network information
+app.get('/api/agentkit/network', async (req: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const networkInfo = await agentKitService.getNetworkInfo();
+    return networkInfo;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ 
+      error: 'Failed to get network information', 
+      details: errorMessage 
+    });
+  }
+});
+
+// Get current gas price
+app.get('/api/agentkit/gas-price', async (req: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const gasPrice = await agentKitService.getGasPrice();
+    return gasPrice;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ 
+      error: 'Failed to get gas price', 
+      details: errorMessage 
+    });
+  }
+});
+
+// Get current block number
+app.get('/api/agentkit/block-number', async (req: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const blockNumber = await agentKitService.getBlockNumber();
+    return { blockNumber };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ 
+      error: 'Failed to get block number', 
+      details: errorMessage 
+    });
+  }
+});
+
 app.post<{ Body: AgentKitExecuteRequest }>('/api/agentkit/execute', async (req, reply) => {
   if (!agentKitInitialized) {
     return reply.status(503).send({ error: 'AgentKit service is not initialized' });
@@ -747,11 +789,15 @@ const startServer = async (): Promise<string> => {
     ));
     
     // Start the server
+    const port = Number(process.env.PORT) || 3000;
+    const host = process.env.HOST || '0.0.0.0';
+    
     const address = await app.listen({
-      port: 3000,
-      host: '0.0.0.0',
-      listenTextResolver: (addr) => `Server is running at ${addr}`
+      port,
+      host,
     });
+    
+    console.log(`Server is running at ${address}`);
     
     console.log(`\n🚀 Server started successfully`);
     console.log(`   - Environment: ${process.env.NODE_ENV === 'development' ? 'development' : 'production'}`);
