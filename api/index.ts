@@ -291,6 +291,34 @@ app.get('/api/agentkit/block-number', async (req: FastifyRequest, reply: Fastify
   }
 });
 
+// Get balance of an address in ETH
+app.get<{ Querystring: { address: string } }>('/api/agentkit/balance', async (req, reply) => {
+  if (!agentKitInitialized) {
+    return reply.status(503).send({ error: 'AgentKit service is not initialized' });
+  }
+  
+  const { address } = req.query;
+  
+  if (!address) {
+    return reply.status(400).send({ error: 'Address is required' });
+  }
+  
+  try {
+    const balance = await agentKitService.getBalance(address);
+    return { 
+      address,
+      balance,
+      unit: 'ETH'
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ 
+      error: 'Failed to get balance', 
+      details: errorMessage 
+    });
+  }
+});
+
 app.post<{ Body: AgentKitExecuteRequest }>('/api/agentkit/execute', async (req, reply) => {
   if (!agentKitInitialized) {
     return reply.status(503).send({ error: 'AgentKit service is not initialized' });

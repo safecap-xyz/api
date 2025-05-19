@@ -202,6 +202,19 @@ class AgentKitService {
     }
   }
 
+  // Get balance of an address in ETH
+  async getBalance(address: string): Promise<string> {
+    const provider = this.getProvider();
+    try {
+      const balance = await provider.getBalance(address);
+      return ethers.formatEther(balance); // Returns balance in ETH
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`Error getting balance for address ${address}:`, errorMessage);
+      throw new Error(`Failed to get balance: ${errorMessage}`);
+    }
+  }
+
   // Private helper to get provider
   private getProvider(): ethers.JsonRpcProvider {
     const rpcUrl = process.env.RPC_URL;
