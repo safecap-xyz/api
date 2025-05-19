@@ -6,8 +6,9 @@
   "private": true,
   "scripts": {
     "debug": "vercel dev",
-    "build": "tsc",
-    "dev": "tsc --watch"
+    "build": "tsc --outDir .vercel/output/functions/api",
+    "dev": "tsc --watch",
+    "start": "node api/index.js"
   },
   "dependencies": {
     "@coinbase/cdp-sdk": "^1.10.0",
