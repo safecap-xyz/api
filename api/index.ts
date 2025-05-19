@@ -261,14 +261,13 @@ app.post<{ Body: AgentKitExecuteRequest }>('/api/agentkit/execute', async (req, 
   }
 
   try {
-    const agentKit = await agentKitService.getAgentKit();
-    const result = await agentKit.perform(action, params || {});
+    const result = await agentKitService.executeAction(action, params || {});
     return { success: true, result };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return reply.status(500).send({ 
       success: false, 
-      error: 'Failed to execute AgentKit action',
+      error: `Failed to execute action ${action}`,
       details: errorMessage 
     });
   }
