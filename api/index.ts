@@ -249,18 +249,118 @@ app.post('/api/send-user-operation', async (req: FastifyRequest<{
   }
 });
 
-app.post('/api/generate-image', async (req: FastifyRequest<{
-  Body: { refImageUrl1: string, refImageUrl2: string, prompt: string }
-}>, reply: FastifyReply) => {
-  // ... existing code ...
+// Image generation types
+interface GenerateImageRequest {
+  refImageUrl1: string;
+  refImageUrl2: string;
+  prompt: string;
+  seed?: number;
+  width?: number;
+  height?: number;
+  ref_res?: number;
+  num_steps?: number;
+  guidance?: number;
+  true_cfg?: number;
+  cfg_start_step?: number;
+  cfg_end_step?: number;
+  neg_prompt?: string;
+  neg_guidance?: number;
+  first_step_guidance?: number;
+  ref_task1?: string;
+  ref_task2?: string;
+}
+
+interface GenerateImageResponse {
+  data: string; // Base64 encoded image or URL
+  success: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+app.post<{ Body: GenerateImageRequest }>('/api/generate-image', async (req, reply) => {
+  const {
+    refImageUrl1,
+    refImageUrl2,
+    prompt,
+    seed = 7698454872441022867,
+    width = 1024,
+    height = 1024,
+    ref_res = 512,
+    num_steps = 12,
+    guidance = 3.5,
+    true_cfg = 1,
+    cfg_start_step = 0,
+    cfg_end_step = 0,
+    neg_prompt = '',
+    neg_guidance = 1,
+    first_step_guidance = 0,
+    ref_task1 = 'id',
+    ref_task2 = 'ip',
+  } = req.body;
+
+  // Validate required fields
+  if (!refImageUrl1 || !refImageUrl2 || !prompt) {
+    return reply.status(400).send({
+      error: 'Missing required fields',
+      details: 'refImageUrl1, refImageUrl2, and prompt are required',
+    });
+  }
+
   try {
-    // ... existing code ...
+    req.log.info('Fetching reference images...');
+    const [refImage1Blob, refImage2Blob] = await Promise.all([
+      (await fetch(refImageUrl1)).blob(),
+      (await fetch(refImageUrl2)).blob(),
+    ]);
+
+    req.log.info('Connecting to Gradio client...');
+    const client = await Client.connect("ByteDance/DreamO");
+
+    req.log.info('Generating image...');
+    const result = await client.predict("/generate_image", {
+      ref_image1: refImageUrl1, // Using URL directly as per Gradio client requirements
+      ref_image2: refImageUrl2,
+      ref_task1,
+      ref_task2,
+      prompt,
+      seed,
+      width,
+      height,
+      ref_res,
+      num_steps,
+      guidance,
+      true_cfg,
+      cfg_start_step,
+      cfg_end_step,
+      neg_prompt,
+      neg_guidance,
+      first_step_guidance,
+    });
+
+    const response: GenerateImageResponse = {
+      data: result.data,
+      success: true,
+      metadata: {
+        model: "ByteDance/DreamO",
+        timestamp: new Date().toISOString(),
+        parameters: {
+          seed,
+          width,
+          height,
+          steps: num_steps,
+          guidance_scale: guidance,
+        },
+      },
+    };
+
+    reply.send(response);
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     req.log.error('Error in generate-image:', error);
+    
     reply.status(500).send({ 
       error: 'Failed to generate image',
-      details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      details: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
+      success: false,
     });
   }
 });
