@@ -111,30 +111,20 @@ interface UserOperationRequest {
 
 // ... existing code ...
 
-// Create Fastify instance with environment-based logging
-const isDevelopment = process.env.NODE_ENV === 'development';
-
-// Simple logger configuration that works in all environments
-const loggerConfig = isDevelopment
-  ? {
-      level: 'debug',
-      transport: {
-        target: 'pino-pretty',
-        options: {
-          translateTime: 'HH:MM:ss Z',
-          ignore: 'pid,hostname',
-        },
-      },
-    }
-  : {
-      level: 'info',
-      // Simple JSON format for production
-      formatters: {
-        level: (label: string) => ({ level: label })
-      },
-      // Add timestamps
-      timestamp: () => `,"time":"${new Date().toISOString()}"`
-    };
+// Create Fastify instance with minimal logger configuration
+const loggerConfig = {
+  level: process.env.NODE_ENV === 'development' ? 'debug' : 'info',
+  // Use simple JSON format in all environments
+  formatters: {
+    level: (label: string) => ({ level: label })
+  },
+  // Add timestamps
+  timestamp: () => `,"time":"${new Date().toISOString()}"`,
+  // Disable transport in production
+  transport: process.env.NODE_ENV === 'development' 
+    ? { target: 'pino-pretty' } 
+    : undefined
+};
 
 // Configure Fastify with proper TypeScript types
 const app: FastifyInstance = Fastify({
@@ -152,7 +142,7 @@ const app: FastifyInstance = Fastify({
 });
 
 // Log startup information
-app.log.info(`Starting in ${isDevelopment ? 'development' : 'production'} mode`);
+app.log.info(`Starting in ${process.env.NODE_ENV === 'development' ? 'development' : 'production'} mode`);
 
 // Declare custom properties for fastify instance
 declare module 'fastify' {
@@ -663,7 +653,7 @@ const startServer = async (): Promise<string> => {
 if (process.env.NODE_ENV !== 'test') {
   startServer()
     .catch(error => {
-      console.error('Fatal error in startup sequence:', error);
+      console.error('Failed to start server:', error);
       process.exit(1);
     });
 }
