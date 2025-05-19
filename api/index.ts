@@ -115,24 +115,30 @@ interface UserOperationRequest {
 const isDevelopment = process.env.NODE_ENV === 'development';
 
 // Configure Fastify with proper TypeScript types
-const app: FastifyInstance = Fastify({
-  logger: {
-    level: process.env.LOG_LEVEL || (isDevelopment ? 'debug' : 'info'),
-    // Use simple JSON logging in production, pretty in development
-    transport: isDevelopment ? {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-        translateTime: 'SYS:standard',
-        ignore: 'pid,hostname',
-        singleLine: true
+const loggerConfig = isDevelopment 
+  ? {
+      level: process.env.LOG_LEVEL || 'debug',
+      transport: {
+        target: 'pino-pretty',
+        options: {
+          colorize: true,
+          translateTime: 'SYS:standard',
+          ignore: 'pid,hostname',
+          singleLine: true
+        }
+      },
+      timestamp: () => `,"time":"${new Date().toISOString()}"`
+    }
+  : {
+      level: process.env.LOG_LEVEL || 'info',
+      timestamp: () => `,"time":"${new Date().toISOString()}"`,
+      formatters: {
+        level: (label: string) => ({ level: label })
       }
-    } : undefined,
-    // Always include timestamps
-    timestamp: () => `,"time":"${new Date().toISOString()}"`,
-    // Disable file logging in serverless environment
-    file: undefined
-  },
+    };
+
+const app: FastifyInstance = Fastify({
+  logger: loggerConfig,
   ajv: {
     customOptions: {
       strict: 'log' as const,  // Use 'as const' to satisfy TypeScript
