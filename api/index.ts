@@ -479,7 +479,7 @@ app.post<{ Body: CreateSmartAccountRequest }>('/api/create-smart-account', async
 
 // CDP Wallet Toolkit API Routes
 
-// Simple CORS configuration for Vercel
+// Define allowed origins
 const allowedOrigins = [
   'https://safecap.xyz',
   'https://www.safecap.xyz',
@@ -487,38 +487,22 @@ const allowedOrigins = [
   'http://localhost:5173'
 ];
 
-// Add CORS headers to all responses
-app.addHook('onSend', (request, reply, payload, done) => {
-  const origin = request.headers.origin || '';
-  const requestOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
-  
-  reply.header('Access-Control-Allow-Origin', requestOrigin);
-  reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  reply.header('Access-Control-Allow-Credentials', 'true');
-  reply.header('Access-Control-Max-Age', '86400');
-  
-  done();
-});
-
-// Handle OPTIONS requests
-app.options('*', async (request, reply) => {
-  reply.send();
-});
-
 // Add a test endpoint to verify CORS is working
 app.get('/api/test-cors', async (request, reply) => {
   return { message: 'CORS test successful' };
 });
 
-// Register basic CORS with minimal configuration
-await app.register(fastifyCors, {
+// Simple CORS configuration
+const corsOptions: FastifyCorsOptions = {
   origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
   optionsSuccessStatus: 204
-});
+};
+
+// Register CORS
+await app.register(fastifyCors, corsOptions);
 
 app.post<{ Body: CreateWalletRequest }>('/api/create-wallet-direct', {
   // Add CORS headers explicitly for this route
