@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 
 // These imports must come after environment variables are loaded
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
-import fastifyCors from '@fastify/cors';
+import fastifyCors, { type FastifyCorsOptions } from '@fastify/cors';
 import { CdpClient } from '@coinbase/cdp-sdk';
 import { Client } from "@gradio/client";
 import { ethers } from 'ethers';
@@ -249,18 +249,118 @@ app.post('/api/send-user-operation', async (req: FastifyRequest<{
   }
 });
 
-app.post('/api/generate-image', async (req: FastifyRequest<{
-  Body: { refImageUrl1: string, refImageUrl2: string, prompt: string }
-}>, reply: FastifyReply) => {
-  // ... existing code ...
+// Image generation types
+interface GenerateImageRequest {
+  refImageUrl1: string;
+  refImageUrl2: string;
+  prompt: string;
+  seed?: number;
+  width?: number;
+  height?: number;
+  ref_res?: number;
+  num_steps?: number;
+  guidance?: number;
+  true_cfg?: number;
+  cfg_start_step?: number;
+  cfg_end_step?: number;
+  neg_prompt?: string;
+  neg_guidance?: number;
+  first_step_guidance?: number;
+  ref_task1?: string;
+  ref_task2?: string;
+}
+
+interface GenerateImageResponse {
+  data: string; // Base64 encoded image or URL
+  success: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+app.post<{ Body: GenerateImageRequest }>('/api/generate-image', async (req, reply) => {
+  const {
+    refImageUrl1,
+    refImageUrl2,
+    prompt,
+    seed = 7698454872441022867,
+    width = 1024,
+    height = 1024,
+    ref_res = 512,
+    num_steps = 12,
+    guidance = 3.5,
+    true_cfg = 1,
+    cfg_start_step = 0,
+    cfg_end_step = 0,
+    neg_prompt = '',
+    neg_guidance = 1,
+    first_step_guidance = 0,
+    ref_task1 = 'id',
+    ref_task2 = 'ip',
+  } = req.body;
+
+  // Validate required fields
+  if (!refImageUrl1 || !refImageUrl2 || !prompt) {
+    return reply.status(400).send({
+      error: 'Missing required fields',
+      details: 'refImageUrl1, refImageUrl2, and prompt are required',
+    });
+  }
+
   try {
-    // ... existing code ...
+    req.log.info('Fetching reference images...');
+    const [refImage1Blob, refImage2Blob] = await Promise.all([
+      (await fetch(refImageUrl1)).blob(),
+      (await fetch(refImageUrl2)).blob(),
+    ]);
+
+    req.log.info('Connecting to Gradio client...');
+    const client = await Client.connect("ByteDance/DreamO");
+
+    req.log.info('Generating image...');
+    const result = await client.predict("/generate_image", {
+      ref_image1: refImageUrl1, // Using URL directly as per Gradio client requirements
+      ref_image2: refImageUrl2,
+      ref_task1,
+      ref_task2,
+      prompt,
+      seed,
+      width,
+      height,
+      ref_res,
+      num_steps,
+      guidance,
+      true_cfg,
+      cfg_start_step,
+      cfg_end_step,
+      neg_prompt,
+      neg_guidance,
+      first_step_guidance,
+    });
+
+    const response: GenerateImageResponse = {
+      data: result.data,
+      success: true,
+      metadata: {
+        model: "ByteDance/DreamO",
+        timestamp: new Date().toISOString(),
+        parameters: {
+          seed,
+          width,
+          height,
+          steps: num_steps,
+          guidance_scale: guidance,
+        },
+      },
+    };
+
+    reply.send(response);
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     req.log.error('Error in generate-image:', error);
+    
     reply.status(500).send({ 
       error: 'Failed to generate image',
-      details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      details: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
+      success: false,
     });
   }
 });
@@ -273,6 +373,97 @@ interface CreateWalletRequest {
   name: string;
   network?: NetworkType;
 }
+
+// Smart Account Types
+interface CreateSmartAccountRequest {
+  ownerAddress: string;
+  network?: NetworkType;
+}
+
+interface CreateSmartAccountResponse {
+  smartAccountAddress: string;
+  ownerAddress: string;
+  network: string;
+}
+
+// CDP Wallet Toolkit API Routes
+app.post<{ Body: CreateSmartAccountRequest }>('/api/create-smart-account', async (req, reply) => {
+  const { ownerAddress, network = 'base-sepolia' } = req.body;
+
+  if (!cdpClient) {
+    return reply.status(503).send({ 
+      error: 'Service Unavailable',
+      details: 'CDP client is not initialized. Please check your environment variables.'
+    });
+  }
+
+  try {
+    if (!ownerAddress) {
+      return reply.status(400).send({ 
+        error: 'Bad Request',
+        details: 'Owner address is required' 
+      });
+    }
+
+    // Ensure the address is properly formatted and has the correct type
+    let formattedAddress: `0x${string}`;
+    try {
+      formattedAddress = ethers.getAddress(ownerAddress);
+    } catch (error) {
+      return reply.status(400).send({
+        error: 'Invalid Address',
+        details: 'The provided owner address is not a valid Ethereum address'
+      });
+    }
+
+    req.log.info(`Creating smart account with owner: ${formattedAddress} on network: ${network}`);
+
+    // First, try to get the owner account
+    let ownerAccount;
+    try {
+      req.log.info('Fetching owner account for address:', formattedAddress);
+      ownerAccount = await cdpClient.evm.getAccount({ address: formattedAddress });
+      req.log.info('Owner account found:', ownerAccount);
+    } catch (error) {
+      req.log.info('Owner account not found, will create a new one');
+      // If the owner account doesn't exist or can't be retrieved in this session,
+      // create a new account to use as the owner
+      const timestamp = Date.now().toString();
+      const validName = `owner${timestamp.substring(timestamp.length - 8)}`;
+      req.log.info('Creating new owner account with name:', validName);
+
+      ownerAccount = await cdpClient.evm.getOrCreateAccount({
+        name: validName
+      });
+      req.log.info('Created new owner account:', ownerAccount.address);
+    }
+
+    // Create a smart account using the owner account object
+    req.log.info('Creating smart account with owner account:', ownerAccount);
+    // Note: Removed network from options as it's not a valid property
+    const result = await cdpClient.evm.createSmartAccount({
+      owner: ownerAccount
+    });
+
+    req.log.info('Smart account created:', result.address);
+
+    const response: CreateSmartAccountResponse = {
+      smartAccountAddress: result.address,
+      ownerAddress: ownerAccount.address,
+      network
+    };
+
+    reply.send(response);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    req.log.error('Error creating smart account:', error);
+    
+    reply.status(500).send({ 
+      error: 'Failed to create smart account',
+      details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+    });
+  }
+});
 
 // CDP Wallet Toolkit API Routes
 app.post<{ Body: CreateWalletRequest }>('/api/create-wallet-direct', async (req, reply) => {
@@ -344,12 +535,62 @@ app.get('/', async (req: FastifyRequest, reply: FastifyReply) => {
 // Server startup function with comprehensive error handling
 const startServer = async (): Promise<string> => {
   try {
-    // Register CORS
-    await app.register(fastifyCors, {
-      origin: '*',
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
-      credentials: true
+    // Configure CORS based on environment
+    const corsOptions: FastifyCorsOptions = {
+      // In production, only allow specific origins
+      // In development, allow all origins
+      origin: process.env.NODE_ENV === 'production' 
+        ? [
+            'https://your-production-domain.com',
+            'https://www.your-production-domain.com',
+            // Add other production domains as needed
+          ]
+        : true, // Allow all in non-production
+      
+      // Allowed HTTP methods
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      
+      // Allowed request headers
+      allowedHeaders: [
+        'Origin',
+        'X-Requested-With',
+        'Content-Type',
+        'Accept',
+        'Authorization',
+        'X-Request-Id',
+        'X-Forwarded-For',
+        'X-Real-IP'
+      ],
+      
+      // Exposed response headers
+      exposedHeaders: [
+        'Content-Length',
+        'Content-Range',
+        'X-Total-Count'
+      ],
+      
+      // Allow credentials (cookies, authorization headers)
+      credentials: true,
+      
+      // Cache preflight requests for 24 hours
+      maxAge: 86400,
+      
+      // Don't pass the CORS preflight response to the route handler
+      preflightContinue: false,
+      
+      // Set the status code for OPTIONS requests
+      optionsSuccessStatus: 204,
+      
+      // Enable CORS for all routes
+      hideOptionsRoute: false
+    };
+
+    // Register CORS with the configured options
+    await app.register(fastifyCors, corsOptions);
+    
+    // Add a route to handle OPTIONS requests (preflight)
+    app.options('*', async (request, reply) => {
+      reply.send();
     });
 
     // Health check endpoint
