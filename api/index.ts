@@ -653,18 +653,8 @@ const startServer = async (): Promise<string> => {
       maxAge: corsOptions.maxAge
     });
 
-    // Register CORS with the configured options - only register once
+    // Register CORS with the configured options - this will handle OPTIONS requests automatically
     await app.register(fastifyCors, corsOptions);
-    
-    // Add a route to handle OPTIONS requests (preflight)
-    app.options('*', async (request, reply) => {
-      console.log('Handling OPTIONS request:', {
-        url: request.url,
-        headers: request.headers,
-        origin: request.headers.origin
-      });
-      reply.send();
-    });
 
     // Health check endpoint
     app.get('/health', async () => {
