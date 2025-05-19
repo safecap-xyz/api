@@ -111,34 +111,27 @@ interface UserOperationRequest {
 
 // ... existing code ...
 
-// Create Fastify instance with production-optimized logger
-const isDevelopment = process.env.NODE_ENV === 'development';
-
-// Configure Fastify with proper TypeScript types
-const loggerConfig = isDevelopment 
-  ? {
-      level: process.env.LOG_LEVEL || 'debug',
-      transport: {
-        target: 'pino-pretty',
-        options: {
-          colorize: true,
-          translateTime: 'SYS:standard',
-          ignore: 'pid,hostname',
-          singleLine: true
-        }
-      },
-      timestamp: () => `,"time":"${new Date().toISOString()}"`
+// Create Fastify instance with minimal logger configuration
+const loggerConfig = {
+  level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'development' ? 'debug' : 'info'),
+  timestamp: () => `,"time":"${new Date().toISOString()}"`,
+  formatters: {
+    level: (label: string) => ({ level: label })
+  },
+  // Disable transport in production
+  transport: process.env.NODE_ENV === 'development' ? {
+    target: 'pino-pretty',
+    options: {
+      colorize: true,
+      translateTime: 'SYS:standard',
+      ignore: 'pid,hostname',
+      singleLine: true
     }
-  : {
-      level: process.env.LOG_LEVEL || 'info',
-      timestamp: () => `,"time":"${new Date().toISOString()}"`,
-      formatters: {
-        level: (label: string) => ({ level: label })
-      }
-    };
+  } : undefined
+};
 
 const app: FastifyInstance = Fastify({
-  logger: loggerConfig,
+  logger: process.env.NODE_ENV === 'production' ? true : loggerConfig,
   ajv: {
     customOptions: {
       strict: 'log' as const,  // Use 'as const' to satisfy TypeScript
