@@ -114,18 +114,31 @@ interface UserOperationRequest {
 // Create Fastify instance with environment-based logging
 const isDevelopment = process.env.NODE_ENV === 'development';
 
+// Simple logger configuration that works in all environments
+const loggerConfig = isDevelopment
+  ? {
+      level: 'debug',
+      transport: {
+        target: 'pino-pretty',
+        options: {
+          translateTime: 'HH:MM:ss Z',
+          ignore: 'pid,hostname',
+        },
+      },
+    }
+  : {
+      level: 'info',
+      // Simple JSON format for production
+      formatters: {
+        level: (label: string) => ({ level: label })
+      },
+      // Add timestamps
+      timestamp: () => `,"time":"${new Date().toISOString()}"`
+    };
+
 // Configure Fastify with proper TypeScript types
 const app: FastifyInstance = Fastify({
-  logger: isDevelopment ? {
-    level: 'debug',
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        translateTime: 'HH:MM:ss Z',
-        ignore: 'pid,hostname',
-      },
-    },
-  } : { level: 'info' },
+  logger: loggerConfig,
   ajv: {
     customOptions: {
       strict: 'log' as const,  // Use 'as const' to satisfy TypeScript
@@ -398,6 +411,7 @@ app.post<{ Body: CreateSmartAccountRequest }>('/api/create-smart-account', async
   }
 
   try {
+    // Validate request
     if (!ownerAddress) {
       return reply.status(400).send({ 
         error: 'Bad Request',
@@ -405,62 +419,76 @@ app.post<{ Body: CreateSmartAccountRequest }>('/api/create-smart-account', async
       });
     }
 
-    // Ensure the address is properly formatted and has the correct type
-    let formattedAddress: `0x${string}`;
-    try {
-      formattedAddress = ethers.getAddress(ownerAddress);
-    } catch (error) {
+    // Validate and format the address
+    if (!ethers.isAddress(ownerAddress)) {
       return reply.status(400).send({
         error: 'Invalid Address',
         details: 'The provided owner address is not a valid Ethereum address'
       });
     }
 
-    req.log.info(`Creating smart account with owner: ${formattedAddress} on network: ${network}`);
-
-    // First, try to get the owner account
-    let ownerAccount;
-    try {
-      req.log.info('Fetching owner account for address:', formattedAddress);
-      ownerAccount = await cdpClient.evm.getAccount({ address: formattedAddress });
-      req.log.info('Owner account found:', ownerAccount);
-    } catch (error) {
-      req.log.info('Owner account not found, will create a new one');
-      // If the owner account doesn't exist or can't be retrieved in this session,
-      // create a new account to use as the owner
-      const timestamp = Date.now().toString();
-      const validName = `owner${timestamp.substring(timestamp.length - 8)}`;
-      req.log.info('Creating new owner account with name:', validName);
-
-      ownerAccount = await cdpClient.evm.getOrCreateAccount({
-        name: validName
-      });
-      req.log.info('Created new owner account:', ownerAccount.address);
-    }
-
-    // Create a smart account using the owner account object
-    req.log.info('Creating smart account with owner account:', ownerAccount);
-    // Note: Removed network from options as it's not a valid property
-    const result = await cdpClient.evm.createSmartAccount({
-      owner: ownerAccount
-    });
-
-    req.log.info('Smart account created:', result.address);
-
-    const response: CreateSmartAccountResponse = {
-      smartAccountAddress: result.address,
-      ownerAddress: ownerAccount.address,
-      network
-    };
-
-    reply.send(response);
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    req.log.error('Error creating smart account:', error);
+    const formattedAddress = ethers.getAddress(ownerAddress);
+    const typedAddress = formattedAddress as `0x${string}`;
     
-    reply.status(500).send({ 
-      error: 'Failed to create smart account',
-      details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+    req.log.info(`Creating smart account with owner: ${formattedAddress} on network: ${network}`);
+    
+    try {
+      // Try to get existing owner account
+      req.log.info('Fetching owner account for address:', formattedAddress);
+      let ownerAccount;
+      
+      try {
+        ownerAccount = await cdpClient.evm.getAccount({ address: typedAddress });
+        req.log.info('Owner account found:', ownerAccount);
+      } catch (error) {
+        // If owner account doesn't exist, create a new one
+        req.log.info('Owner account not found, creating new one');
+        const timestamp = Date.now().toString();
+        const validName = `owner${timestamp.substring(timestamp.length - 8)}`;
+        
+        ownerAccount = await cdpClient.evm.getOrCreateAccount({
+          name: validName
+        });
+        req.log.info('Created new owner account:', ownerAccount.address);
+      }
+
+      // Create the smart account using the EVM client
+      req.log.info('Creating smart account...');
+      const result = await cdpClient.evm.createSmartAccount({
+        owner: ownerAccount,
+        // Note: The network is already set in the CDP client initialization
+      });
+
+      req.log.info('Smart account created successfully');
+      
+      return reply.send({
+        smartAccountAddress: result.address,
+        ownerAddress: formattedAddress,
+        network
+      } as CreateSmartAccountResponse);
+      
+    } catch (error: any) {
+      req.log.error('Error during smart account creation:', error);
+      throw error; // Will be caught by the outer catch
+    }
+    
+  } catch (error: any) {
+    req.log.error('Error in create-smart-account endpoint:', error);
+    
+    // Handle known error cases
+    if (error.message?.includes('invalid address')) {
+      return reply.status(400).send({
+        error: 'Invalid Address',
+        details: 'The provided address is not a valid Ethereum address'
+      });
+    }
+    
+    // Default error response
+    return reply.status(500).send({
+      error: 'Internal Server Error',
+      details: process.env.NODE_ENV === 'development' 
+        ? error.message 
+        : 'Failed to create smart account. Please try again later.'
     });
   }
 });
@@ -541,8 +569,8 @@ const startServer = async (): Promise<string> => {
       // In development, allow all origins
       origin: process.env.NODE_ENV === 'production' 
         ? [
-            'https://safecap.xyz',
-            'https://www.safecap.xyz',
+            'https://your-production-domain.com',
+            'https://www.your-production-domain.com',
             // Add other production domains as needed
           ]
         : true, // Allow all in non-production
