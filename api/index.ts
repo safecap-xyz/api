@@ -14,9 +14,12 @@ import { fileURLToPath } from 'url';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import fastifyCors, { type FastifyCorsOptions } from '@fastify/cors';
 import { CdpClient } from '@coinbase/cdp-sdk';
+// import { AgentKit } from '@coinbase/agentkit';
+// import { CdpV2EvmWalletProvider } from '@coinbase/agentkit/wallets/cdp-v2-evm-wallet-provider';
 import { Client } from "@gradio/client";
 import { ethers } from 'ethers';
 import { readFile } from 'fs/promises';
+import { agentKitService } from '../services/agentKitService.js';
 
 // Debug current working directory
 console.log('Current working directory:', process.cwd());
@@ -157,7 +160,26 @@ const NETWORK_CONFIG: NetworkConfigs = {
 // Initialize CDP client with environment variable validation
 let cdpClient: CdpClient | null = null;
 
+// Initialize AgentKit service
+let agentKitInitialized = false;
+
 try {
+  // Initialize AgentKit if required environment variables are present
+  if (process.env.AGENTKIT_API_KEY && process.env.WALLET_PRIVATE_KEY) {
+    agentKitService.initialize()
+      .then(() => {
+        agentKitInitialized = true;
+        console.log('AgentKit service initialized successfully');
+      })
+      .catch((error: unknown) => {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('Failed to initialize AgentKit service:', errorMessage);
+      });
+  } else {
+    console.warn('Missing required AgentKit environment variables. AgentKit functionality will be disabled.');
+    console.warn('Please set AGENTKIT_API_KEY and WALLET_PRIVATE_KEY in your .env file');
+  }
+
   if (!process.env.CDP_API_KEY_ID || !process.env.CDP_API_KEY_SECRET || !process.env.CDP_WALLET_SECRET) {
     console.warn('Missing one or more required CDP environment variables. CDP functionality will be disabled.');
     console.warn('Please set CDP_API_KEY_ID, CDP_API_KEY_SECRET, and CDP_WALLET_SECRET in your .env file');
@@ -186,6 +208,22 @@ interface ErrorResponse {
   details?: unknown;
 }
 
+interface AgentKitAccountInfo {
+  ownerAddress: string;
+  smartAccountAddress: string;
+}
+
+interface AgentKitExecuteRequest {
+  action: string;
+  params?: Record<string, unknown>;
+}
+
+interface AgentKitExecuteResponse {
+  success: boolean;
+  result?: unknown;
+  error?: string;
+}
+
 app.post<{ Body: SampleUserOperationRequest }>('/api/sample-user-operation', async (req, reply) => {
   // ... existing code ...
   try {
@@ -193,6 +231,46 @@ app.post<{ Body: SampleUserOperationRequest }>('/api/sample-user-operation', asy
   } catch (error) {
     console.error('Error sending sample user operation:', error);
     reply.code(500).send({ error: (error as Error).message || 'Failed to send sample user operation' });
+  }
+});
+
+// AgentKit API Routes
+app.get('/api/agentkit/account', async (req: FastifyRequest, reply: FastifyReply) => {
+  if (!agentKitInitialized) {
+    return reply.status(503).send({ error: 'AgentKit service is not initialized' });
+  }
+  
+  try {
+    const accountInfo = await agentKitService.getAccountInfo();
+    return accountInfo;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ error: 'Failed to get AgentKit account info', details: errorMessage });
+  }
+});
+
+app.post<{ Body: AgentKitExecuteRequest }>('/api/agentkit/execute', async (req, reply) => {
+  if (!agentKitInitialized) {
+    return reply.status(503).send({ error: 'AgentKit service is not initialized' });
+  }
+  
+  const { action, params } = req.body;
+  
+  if (!action) {
+    return reply.status(400).send({ error: 'Action is required' });
+  }
+
+  try {
+    const agentKit = await agentKitService.getAgentKit();
+    const result = await agentKit.perform(action, params || {});
+    return { success: true, result };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ 
+      success: false, 
+      error: 'Failed to execute AgentKit action',
+      details: errorMessage 
+    });
   }
 });
 
