@@ -374,6 +374,97 @@ interface CreateWalletRequest {
   network?: NetworkType;
 }
 
+// Smart Account Types
+interface CreateSmartAccountRequest {
+  ownerAddress: string;
+  network?: NetworkType;
+}
+
+interface CreateSmartAccountResponse {
+  smartAccountAddress: string;
+  ownerAddress: string;
+  network: string;
+}
+
+// CDP Wallet Toolkit API Routes
+app.post<{ Body: CreateSmartAccountRequest }>('/api/create-smart-account', async (req, reply) => {
+  const { ownerAddress, network = 'base-sepolia' } = req.body;
+
+  if (!cdpClient) {
+    return reply.status(503).send({ 
+      error: 'Service Unavailable',
+      details: 'CDP client is not initialized. Please check your environment variables.'
+    });
+  }
+
+  try {
+    if (!ownerAddress) {
+      return reply.status(400).send({ 
+        error: 'Bad Request',
+        details: 'Owner address is required' 
+      });
+    }
+
+    // Ensure the address is properly formatted and has the correct type
+    let formattedAddress: `0x${string}`;
+    try {
+      formattedAddress = ethers.getAddress(ownerAddress);
+    } catch (error) {
+      return reply.status(400).send({
+        error: 'Invalid Address',
+        details: 'The provided owner address is not a valid Ethereum address'
+      });
+    }
+
+    req.log.info(`Creating smart account with owner: ${formattedAddress} on network: ${network}`);
+
+    // First, try to get the owner account
+    let ownerAccount;
+    try {
+      req.log.info('Fetching owner account for address:', formattedAddress);
+      ownerAccount = await cdpClient.evm.getAccount({ address: formattedAddress });
+      req.log.info('Owner account found:', ownerAccount);
+    } catch (error) {
+      req.log.info('Owner account not found, will create a new one');
+      // If the owner account doesn't exist or can't be retrieved in this session,
+      // create a new account to use as the owner
+      const timestamp = Date.now().toString();
+      const validName = `owner${timestamp.substring(timestamp.length - 8)}`;
+      req.log.info('Creating new owner account with name:', validName);
+
+      ownerAccount = await cdpClient.evm.getOrCreateAccount({
+        name: validName
+      });
+      req.log.info('Created new owner account:', ownerAccount.address);
+    }
+
+    // Create a smart account using the owner account object
+    req.log.info('Creating smart account with owner account:', ownerAccount);
+    // Note: Removed network from options as it's not a valid property
+    const result = await cdpClient.evm.createSmartAccount({
+      owner: ownerAccount
+    });
+
+    req.log.info('Smart account created:', result.address);
+
+    const response: CreateSmartAccountResponse = {
+      smartAccountAddress: result.address,
+      ownerAddress: ownerAccount.address,
+      network
+    };
+
+    reply.send(response);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    req.log.error('Error creating smart account:', error);
+    
+    reply.status(500).send({ 
+      error: 'Failed to create smart account',
+      details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+    });
+  }
+});
+
 // CDP Wallet Toolkit API Routes
 app.post<{ Body: CreateWalletRequest }>('/api/create-wallet-direct', async (req, reply) => {
   const { type, name, network = 'base-sepolia' } = req.body;
