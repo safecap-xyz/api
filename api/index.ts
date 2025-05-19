@@ -492,17 +492,7 @@ app.get('/api/test-cors', async (request, reply) => {
   return { message: 'CORS test successful' };
 });
 
-// Simple CORS configuration
-const corsOptions: FastifyCorsOptions = {
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-  optionsSuccessStatus: 204
-};
-
-// Register CORS
-await app.register(fastifyCors, corsOptions);
+// CORS configuration will be registered later in the server setup
 
 app.post<{ Body: CreateWalletRequest }>('/api/create-wallet-direct', {
   // Add CORS headers explicitly for this route
@@ -663,7 +653,7 @@ const startServer = async (): Promise<string> => {
       maxAge: corsOptions.maxAge
     });
 
-    // Register CORS with the configured options
+    // Register CORS with the configured options - only register once
     await app.register(fastifyCors, corsOptions);
     
     // Add a route to handle OPTIONS requests (preflight)
