@@ -825,13 +825,27 @@ const startServer = async (): Promise<string> => {
   }
 };
 
-// Only start the server if this file is run directly
-if (process.env.NODE_ENV !== 'test') {
-  startServer()
-    .catch(error => {
-      console.error('Failed to start server:', error);
-      process.exit(1);
-    });
+// Start the server if this file is run directly
+const isTest = process.env.NODE_ENV === 'test';
+const isJest = process.env.JEST_WORKER_ID !== undefined;
+
+if (!isTest && !isJest) {
+  console.log('Starting server in', process.env.NODE_ENV || 'development', 'mode...');
+  
+  // Add a small delay to ensure all async operations are ready
+  setTimeout(() => {
+    startServer()
+      .then(address => {
+        console.log(`Server started successfully at ${address}`);
+      })
+      .catch(error => {
+        console.error('Failed to start server:');
+        console.error(error);
+        process.exit(1);
+      });
+  }, 100);
+} else {
+  console.log('Skipping server start in test environment');
 }
 
 // Export the Fastify server for serverless environments
