@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "debug": "vercel dev",
-    "build": "tsc --outDir .vercel/output/functions/api",
+    "build": "node vercel-build.js",
     "dev": "tsc --watch",
     "start": "node api/index.js"
   },
