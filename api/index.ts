@@ -111,24 +111,28 @@ interface UserOperationRequest {
 
 // ... existing code ...
 
-// Create Fastify instance with minimal logger configuration
-const loggerConfig = {
-  level: process.env.NODE_ENV === 'development' ? 'debug' : 'info',
-  // Use simple JSON format in all environments
-  formatters: {
-    level: (label: string) => ({ level: label })
-  },
-  // Add timestamps
-  timestamp: () => `,"time":"${new Date().toISOString()}"`,
-  // Disable transport in production
-  transport: process.env.NODE_ENV === 'development' 
-    ? { target: 'pino-pretty' } 
-    : undefined
-};
+// Create Fastify instance with production-optimized logger
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 // Configure Fastify with proper TypeScript types
 const app: FastifyInstance = Fastify({
-  logger: loggerConfig,
+  logger: {
+    level: process.env.LOG_LEVEL || (isDevelopment ? 'debug' : 'info'),
+    // Use simple JSON logging in production, pretty in development
+    transport: isDevelopment ? {
+      target: 'pino-pretty',
+      options: {
+        colorize: true,
+        translateTime: 'SYS:standard',
+        ignore: 'pid,hostname',
+        singleLine: true
+      }
+    } : undefined,
+    // Always include timestamps
+    timestamp: () => `,"time":"${new Date().toISOString()}"`,
+    // Disable file logging in serverless environment
+    file: undefined
+  },
   ajv: {
     customOptions: {
       strict: 'log' as const,  // Use 'as const' to satisfy TypeScript
@@ -486,34 +490,44 @@ app.post<{ Body: CreateSmartAccountRequest }>('/api/create-smart-account', async
 // CDP Wallet Toolkit API Routes
 
 // Simple CORS configuration for Vercel
-const corsOptions = {
-  origin: [
-    'https://safecap.xyz',
-    'https://www.safecap.xyz',
-    'http://localhost:3000',
-    'http://localhost:5173'
-  ],
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  exposedHeaders: [
-    'Content-Length',
-    'Content-Range',
-    'X-Total-Count',
-    'X-Request-Id',
-    'Authorization'
-  ],
-  credentials: true,
-  maxAge: 86400, // 24 hours
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-};
+const allowedOrigins = [
+  'https://safecap.xyz',
+  'https://www.safecap.xyz',
+  'http://localhost:3000',
+  'http://localhost:5173'
+];
 
-// Register CORS with the configured options
-await app.register(fastifyCors, corsOptions);
+// Add CORS headers to all responses
+app.addHook('onSend', (request, reply, payload, done) => {
+  const origin = request.headers.origin || '';
+  const requestOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+  
+  reply.header('Access-Control-Allow-Origin', requestOrigin);
+  reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  reply.header('Access-Control-Allow-Credentials', 'true');
+  reply.header('Access-Control-Max-Age', '86400');
+  
+  done();
+});
 
-// Add explicit OPTIONS handler for all routes
+// Handle OPTIONS requests
 app.options('*', async (request, reply) => {
   reply.send();
+});
+
+// Add a test endpoint to verify CORS is working
+app.get('/api/test-cors', async (request, reply) => {
+  return { message: 'CORS test successful' };
+});
+
+// Register basic CORS with minimal configuration
+await app.register(fastifyCors, {
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 204
 });
 
 app.post<{ Body: CreateWalletRequest }>('/api/create-wallet-direct', {
@@ -693,13 +707,21 @@ const startServer = async (): Promise<string> => {
       return { status: 'ok', timestamp: new Date().toISOString() };
     });
 
+    // Log startup information
+    console.log(`Starting server in ${process.env.NODE_ENV === 'development' ? 'development' : 'production'} mode`);
+    console.log('Environment variables loaded:', Object.keys(process.env).filter(key => 
+      key === 'NODE_ENV' || 
+      key.startsWith('CDP_') || 
+      key.startsWith('ALCHEMY_')
+    ));
+    
     // Start the server
     const address = await app.listen({
       port: 3000,
       host: '0.0.0.0',
       listenTextResolver: (addr) => `Server is running at ${addr}`
     });
-
+    
     console.log(`\n🚀 Server started successfully`);
     console.log(`   - Environment: ${process.env.NODE_ENV === 'development' ? 'development' : 'production'}`);
     console.log(`   - Node version: ${process.version}`);
