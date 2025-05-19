@@ -111,27 +111,18 @@ interface UserOperationRequest {
 
 // ... existing code ...
 
-// Create Fastify instance with minimal logger configuration
-const loggerConfig = {
-  level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'development' ? 'debug' : 'info'),
-  timestamp: () => `,"time":"${new Date().toISOString()}"`,
-  formatters: {
-    level: (label: string) => ({ level: label })
-  },
-  // Disable transport in production
-  transport: process.env.NODE_ENV === 'development' ? {
-    target: 'pino-pretty',
-    options: {
-      colorize: true,
-      translateTime: 'SYS:standard',
-      ignore: 'pid,hostname',
-      singleLine: true
-    }
-  } : undefined
-};
-
+// Use Fastify's default logger with minimal configuration
 const app: FastifyInstance = Fastify({
-  logger: process.env.NODE_ENV === 'production' ? true : loggerConfig,
+  logger: {
+    level: process.env.LOG_LEVEL || 'info',
+    // Disable transport in all environments to avoid pino-pretty issues
+    transport: undefined,
+    // Basic formatting
+    timestamp: () => `,"time":"${new Date().toISOString()}"`,
+    formatters: {
+      level: (label: string) => ({ level: label })
+    }
+  },
   ajv: {
     customOptions: {
       strict: 'log' as const,  // Use 'as const' to satisfy TypeScript
