@@ -484,7 +484,64 @@ app.post<{ Body: CreateSmartAccountRequest }>('/api/create-smart-account', async
 });
 
 // CDP Wallet Toolkit API Routes
-app.post<{ Body: CreateWalletRequest }>('/api/create-wallet-direct', async (req, reply) => {
+
+// Simple CORS configuration for Vercel
+const corsOptions = {
+  origin: [
+    'https://safecap.xyz',
+    'https://www.safecap.xyz',
+    'http://localhost:3000',
+    'http://localhost:5173'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: [
+    'Content-Length',
+    'Content-Range',
+    'X-Total-Count',
+    'X-Request-Id',
+    'Authorization'
+  ],
+  credentials: true,
+  maxAge: 86400, // 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+// Register CORS with the configured options
+await app.register(fastifyCors, corsOptions);
+
+// Add explicit OPTIONS handler for all routes
+app.options('*', async (request, reply) => {
+  reply.send();
+});
+
+app.post<{ Body: CreateWalletRequest }>('/api/create-wallet-direct', {
+  // Add CORS headers explicitly for this route
+  preHandler: (request, reply, done) => {
+    const origin = request.headers.origin || '';
+    const allowedOrigins = [
+      'https://safecap.xyz',
+      'https://www.safecap.xyz',
+      'http://localhost:3000',
+      'http://localhost:5173'
+    ];
+    
+    const requestOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+    
+    reply.header('Access-Control-Allow-Origin', requestOrigin);
+    reply.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    reply.header('Access-Control-Allow-Credentials', 'true');
+    
+    // Handle preflight
+    if (request.method === 'OPTIONS') {
+      return reply.send();
+    }
+    
+    done();
+  }
+}, async (req, reply) => {
   const { type, name, network = 'base-sepolia' } = req.body;
 
   if (!cdpClient) {
@@ -608,11 +665,26 @@ const startServer = async (): Promise<string> => {
       hideOptionsRoute: false
     };
 
+    // Add debug logging for CORS configuration
+    console.log('CORS Configuration:', {
+      origin: corsOptions.origin,
+      methods: corsOptions.methods,
+      allowedHeaders: corsOptions.allowedHeaders,
+      exposedHeaders: corsOptions.exposedHeaders,
+      credentials: corsOptions.credentials,
+      maxAge: corsOptions.maxAge
+    });
+
     // Register CORS with the configured options
     await app.register(fastifyCors, corsOptions);
     
     // Add a route to handle OPTIONS requests (preflight)
     app.options('*', async (request, reply) => {
+      console.log('Handling OPTIONS request:', {
+        url: request.url,
+        headers: request.headers,
+        origin: request.headers.origin
+      });
       reply.send();
     });
 
