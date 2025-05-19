@@ -1,7 +1,7 @@
-import { AgentKit } from '@coinbase/agentkit';
-import { CdpV2EvmWalletProvider } from '@coinbase/agentkit/wallets/cdp-v2-evm-wallet-provider';
+import { AgentKit, CdpV2EvmWalletProvider } from '@coinbase/agentkit';
+// import { CdpV2EvmWalletProvider } from '@coinbase/agentkit/wallets/cdp-v2-evm-wallet-provider';
 import { CdpClient } from '@coinbase/cdp-sdk';
-import { EvmAccount, EvmSmartAccount } from '@coinbase/cdp-sdk/accounts/evm';
+// import type { EvmAccount, EvmSmartAccount } from '@coinbase/cdp-sdk';
 
 export interface IAgentKitService {
   initialize(): Promise<void>;
@@ -15,7 +15,7 @@ export interface IAgentKitService {
 class AgentKitService implements IAgentKitService {
   private cdpClient: CdpClient;
   private agentKit: AgentKit | null = null;
-  private ownerAccount: EvmAccount | null = null;
+  // private ownerAccount: EvmAccount | null = null;
   private smartAccount: EvmSmartAccount | null = null;
   private isInitializing: boolean = false;
   private initializationPromise: Promise<void> | null = null;
@@ -80,10 +80,10 @@ class AgentKitService implements IAgentKitService {
   }
 
   async getAccountInfo() {
-    if (!this.ownerAccount || !this.smartAccount) {
+    if (!this.smartAccount) {
       await this.initialize();
     }
-    if (!this.ownerAccount || !this.smartAccount) {
+    if (!this.smartAccount) {
       throw new Error('Failed to get account information');
     }
     return {
