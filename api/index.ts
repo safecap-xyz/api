@@ -20,6 +20,7 @@ import { Client } from "@gradio/client";
 import { ethers } from 'ethers';
 import { readFile } from 'fs/promises';
 import { agentKitService } from '../services/agentKitService.js';
+import { openaiService } from '../services/openaiService.js';
 
 // Debug current working directory
 console.log('Current working directory:', process.cwd());
@@ -852,6 +853,52 @@ const startServer = async (): Promise<string> => {
     process.exit(1);
   }
 };
+
+// OpenAI-compatible API interfaces
+interface OpenAICompletionRequest {
+  prompt: string;
+  model?: string;
+  max_tokens?: number;
+}
+
+interface OpenAIChatCompletionRequest {
+  messages: Array<{
+    role: 'user' | 'assistant' | 'system';
+    name?: string;
+    content: string;
+  }>;
+  model?: string;
+  max_tokens?: number;
+}
+
+// OpenAI-compatible API routes
+app.post<{ Body: OpenAICompletionRequest }>('/v1/completions', async (req, reply) => {
+  try {
+    const { prompt, model, max_tokens } = req.body;
+    const result = await openaiService.createCompletion(prompt, model, max_tokens);
+    return result;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ 
+      error: 'Failed to create completion', 
+      details: errorMessage 
+    });
+  }
+});
+
+app.post<{ Body: OpenAIChatCompletionRequest }>('/v1/chat/completions', async (req, reply) => {
+  try {
+    const { messages, model, max_tokens } = req.body;
+    const result = await openaiService.createChatCompletion(messages, model, max_tokens);
+    return result;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ 
+      error: 'Failed to create chat completion', 
+      details: errorMessage 
+    });
+  }
+});
 
 // Start the server if this file is run directly
 const isTest = process.env.NODE_ENV === 'test';
