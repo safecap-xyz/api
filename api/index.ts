@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 
 // These imports must come after environment variables are loaded
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
-import fastifyCors from '@fastify/cors';
+import fastifyCors, { type FastifyCorsOptions } from '@fastify/cors';
 import { CdpClient } from '@coinbase/cdp-sdk';
 import { Client } from "@gradio/client";
 import { ethers } from 'ethers';
@@ -535,12 +535,62 @@ app.get('/', async (req: FastifyRequest, reply: FastifyReply) => {
 // Server startup function with comprehensive error handling
 const startServer = async (): Promise<string> => {
   try {
-    // Register CORS
-    await app.register(fastifyCors, {
-      origin: '*',
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
-      credentials: true
+    // Configure CORS based on environment
+    const corsOptions: FastifyCorsOptions = {
+      // In production, only allow specific origins
+      // In development, allow all origins
+      origin: process.env.NODE_ENV === 'production' 
+        ? [
+            'https://your-production-domain.com',
+            'https://www.your-production-domain.com',
+            // Add other production domains as needed
+          ]
+        : true, // Allow all in non-production
+      
+      // Allowed HTTP methods
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      
+      // Allowed request headers
+      allowedHeaders: [
+        'Origin',
+        'X-Requested-With',
+        'Content-Type',
+        'Accept',
+        'Authorization',
+        'X-Request-Id',
+        'X-Forwarded-For',
+        'X-Real-IP'
+      ],
+      
+      // Exposed response headers
+      exposedHeaders: [
+        'Content-Length',
+        'Content-Range',
+        'X-Total-Count'
+      ],
+      
+      // Allow credentials (cookies, authorization headers)
+      credentials: true,
+      
+      // Cache preflight requests for 24 hours
+      maxAge: 86400,
+      
+      // Don't pass the CORS preflight response to the route handler
+      preflightContinue: false,
+      
+      // Set the status code for OPTIONS requests
+      optionsSuccessStatus: 204,
+      
+      // Enable CORS for all routes
+      hideOptionsRoute: false
+    };
+
+    // Register CORS with the configured options
+    await app.register(fastifyCors, corsOptions);
+    
+    // Add a route to handle OPTIONS requests (preflight)
+    app.options('*', async (request, reply) => {
+      reply.send();
     });
 
     // Health check endpoint
