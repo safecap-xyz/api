@@ -164,20 +164,20 @@ let cdpClient: CdpClient | null = null;
 let agentKitInitialized = false;
 
 try {
-  // Initialize AgentKit if required environment variables are present
-  if (process.env.AGENTKIT_API_KEY && process.env.WALLET_PRIVATE_KEY) {
+  // Initialize AgentKit with CDP credentials
+  if (process.env.CDP_API_KEY_ID && process.env.CDP_API_KEY_SECRET && process.env.CDP_WALLET_SECRET) {
     agentKitService.initialize()
       .then(() => {
         agentKitInitialized = true;
-        console.log('AgentKit service initialized successfully');
+        console.log('AgentKit service initialized successfully with CDP credentials');
       })
       .catch((error: unknown) => {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error('Failed to initialize AgentKit service:', errorMessage);
+        console.error('Failed to initialize AgentKit service with CDP credentials:', errorMessage);
       });
   } else {
-    console.warn('Missing required AgentKit environment variables. AgentKit functionality will be disabled.');
-    console.warn('Please set AGENTKIT_API_KEY and WALLET_PRIVATE_KEY in your .env file');
+    console.warn('Missing required CDP environment variables. AgentKit functionality will be disabled.');
+    console.warn('Please set CDP_API_KEY_ID, CDP_API_KEY_SECRET, and CDP_WALLET_SECRET in your .env file');
   }
 
   if (!process.env.CDP_API_KEY_ID || !process.env.CDP_API_KEY_SECRET || !process.env.CDP_WALLET_SECRET) {
