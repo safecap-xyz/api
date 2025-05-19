@@ -111,34 +111,18 @@ interface UserOperationRequest {
 
 // ... existing code ...
 
-// Create Fastify instance with production-optimized logger
-const isDevelopment = process.env.NODE_ENV === 'development';
-
-// Configure Fastify with proper TypeScript types
-const loggerConfig = isDevelopment 
-  ? {
-      level: process.env.LOG_LEVEL || 'debug',
-      transport: {
-        target: 'pino-pretty',
-        options: {
-          colorize: true,
-          translateTime: 'SYS:standard',
-          ignore: 'pid,hostname',
-          singleLine: true
-        }
-      },
-      timestamp: () => `,"time":"${new Date().toISOString()}"`
-    }
-  : {
-      level: process.env.LOG_LEVEL || 'info',
-      timestamp: () => `,"time":"${new Date().toISOString()}"`,
-      formatters: {
-        level: (label: string) => ({ level: label })
-      }
-    };
-
+// Use Fastify's default logger with minimal configuration
 const app: FastifyInstance = Fastify({
-  logger: loggerConfig,
+  logger: {
+    level: process.env.LOG_LEVEL || 'info',
+    // Disable transport in all environments to avoid pino-pretty issues
+    transport: undefined,
+    // Basic formatting
+    timestamp: () => `,"time":"${new Date().toISOString()}"`,
+    formatters: {
+      level: (label: string) => ({ level: label })
+    }
+  },
   ajv: {
     customOptions: {
       strict: 'log' as const,  // Use 'as const' to satisfy TypeScript
@@ -495,7 +479,7 @@ app.post<{ Body: CreateSmartAccountRequest }>('/api/create-smart-account', async
 
 // CDP Wallet Toolkit API Routes
 
-// Simple CORS configuration for Vercel
+// Define allowed origins
 const allowedOrigins = [
   'https://safecap.xyz',
   'https://www.safecap.xyz',
@@ -503,38 +487,12 @@ const allowedOrigins = [
   'http://localhost:5173'
 ];
 
-// Add CORS headers to all responses
-app.addHook('onSend', (request, reply, payload, done) => {
-  const origin = request.headers.origin || '';
-  const requestOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
-  
-  reply.header('Access-Control-Allow-Origin', requestOrigin);
-  reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  reply.header('Access-Control-Allow-Credentials', 'true');
-  reply.header('Access-Control-Max-Age', '86400');
-  
-  done();
-});
-
-// Handle OPTIONS requests
-app.options('*', async (request, reply) => {
-  reply.send();
-});
-
 // Add a test endpoint to verify CORS is working
 app.get('/api/test-cors', async (request, reply) => {
   return { message: 'CORS test successful' };
 });
 
-// Register basic CORS with minimal configuration
-await app.register(fastifyCors, {
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-  optionsSuccessStatus: 204
-});
+// CORS configuration will be registered later in the server setup
 
 app.post<{ Body: CreateWalletRequest }>('/api/create-wallet-direct', {
   // Add CORS headers explicitly for this route
@@ -695,18 +653,8 @@ const startServer = async (): Promise<string> => {
       maxAge: corsOptions.maxAge
     });
 
-    // Register CORS with the configured options
+    // Register CORS with the configured options - this will handle OPTIONS requests automatically
     await app.register(fastifyCors, corsOptions);
-    
-    // Add a route to handle OPTIONS requests (preflight)
-    app.options('*', async (request, reply) => {
-      console.log('Handling OPTIONS request:', {
-        url: request.url,
-        headers: request.headers,
-        origin: request.headers.origin
-      });
-      reply.send();
-    });
 
     // Health check endpoint
     app.get('/health', async () => {
