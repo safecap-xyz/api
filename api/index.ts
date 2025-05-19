@@ -541,8 +541,8 @@ const startServer = async (): Promise<string> => {
       // In development, allow all origins
       origin: process.env.NODE_ENV === 'production' 
         ? [
-            'https://your-production-domain.com',
-            'https://www.your-production-domain.com',
+            'https://safecap.xyz',
+            'https://www.safecap.xyz',
             // Add other production domains as needed
           ]
         : true, // Allow all in non-production
