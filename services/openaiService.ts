@@ -1,173 +1,108 @@
 import OpenAI from 'openai';
 import { agentKitService } from './agentKitService.js';
 
-export class OpenAIService {
+class OpenAIService {
+  private static instance: OpenAIService | null = null;
   private openai: OpenAI | null = null;
   private isInitialized = false;
 
-  constructor() {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
+  private constructor() {
+    // Private constructor to enforce singleton pattern
+  }
+
+  public static getInstance(): OpenAIService {
+    if (!OpenAIService.instance) {
+      OpenAIService.instance = new OpenAIService();
+    }
+    return OpenAIService.instance;
+  }
+
+  public initialize(apiKey?: string): void {
+    if (this.isInitialized) return;
+
+    const key = apiKey || process.env.OPENAI_API_KEY;
+    console.log('Initializing OpenAI service with API key:', key ? '***' + key.slice(-4) : 'undefined');
+    
+    if (!key) {
       console.warn('OPENAI_API_KEY is not set. OpenAI functionality will be disabled.');
       return;
     }
 
-    this.openai = new OpenAI({
-      apiKey,
-    });
-    this.isInitialized = true;
+    try {
+      this.openai = new OpenAI({ apiKey: key });
+      this.isInitialized = true;
+      console.log('OpenAI service initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize OpenAI service:', error);
+    }
+  }
+
+  public isServiceInitialized(): boolean {
+    return this.isInitialized && this.openai !== null;
   }
 
   async createCompletion(prompt: string, model: string = 'gpt-3.5-turbo-instruct', maxTokens: number = 1000): Promise<any> {
-    if (!this.openai) {
-      throw new Error('OpenAI client is not initialized');
-    }
-    if (!this.isInitialized) {
+    if (!this.isServiceInitialized() || !this.openai) {
       throw new Error('OpenAI service is not initialized');
     }
 
     try {
-      // First, check if the prompt contains any on-chain data requests
-      const shouldQueryChain = await this.needsOnChainData(prompt);
-      
-      let context = '';
-      
-      if (shouldQueryChain) {
-        // Get relevant on-chain data using AgentKit
-        try {
-          // Example: Get balance if the prompt is about wallet balance
-          if (prompt.toLowerCase().includes('balance') || prompt.toLowerCase().includes('how much')) {
-            const addressMatch = prompt.match(/0x[a-fA-F0-9]{40}/);
-            if (addressMatch) {
-              const address = addressMatch[0];
-              const balance = await agentKitService.getBalance(address);
-              context = `On-chain data: The balance of address ${address} is ${balance} ETH.\n\n`;
-            }
-          }
-          // Add more on-chain data queries as needed
-        } catch (error) {
-          console.error('Error fetching on-chain data:', error);
-          context = 'Error fetching on-chain data. ';
-        }
-      }
-
-      // Create the completion with the context
-      const response = await this.openai.completions.create({
+      const completion = await this.openai.completions.create({
         model,
-        prompt: context + prompt,
+        prompt,
         max_tokens: maxTokens,
-        temperature: 0.7,
       });
-
-      return {
-        id: response.id,
-        object: 'text_completion',
-        created: Math.floor(Date.now() / 1000),
-        model: response.model,
-        choices: response.choices.map(choice => ({
-          text: choice.text,
-          index: choice.index,
-          logprobs: null,
-          finish_reason: choice.finish_reason,
-        })),
-        usage: response.usage,
-      };
+      return completion;
     } catch (error) {
-      console.error('Error in OpenAI completion:', error);
-      if (error instanceof Error) {
-        throw new Error(`OpenAI API error: ${error.message}`);
-      }
-      throw new Error('OpenAI API error: Unknown error occurred');
+      console.error('Error in createCompletion:', error);
+      throw error;
     }
   }
 
-  async createChatCompletion(
-    messages: Array<{role: 'user' | 'assistant' | 'system'; name?: string; content: string}>, 
-    model: string = 'gpt-3.5-turbo', 
-    maxTokens: number = 1000
-  ): Promise<any> {
-    if (!this.openai) {
-      throw new Error('OpenAI client is not initialized');
-    }
-    if (!this.isInitialized) {
+  async createChatCompletion(messages: any[], model: string = 'gpt-3.5-turbo', maxTokens: number = 1000): Promise<any> {
+    if (!this.isServiceInitialized() || !this.openai) {
       throw new Error('OpenAI service is not initialized');
     }
 
     try {
-      // Check the last user message for on-chain data needs
-      const lastUserMessage = messages
-        .slice()
-        .reverse()
-        .find(m => m.role === 'user');
-
-      let context = '';
-      
-      if (lastUserMessage) {
-        const shouldQueryChain = await this.needsOnChainData(lastUserMessage.content);
-        
-        if (shouldQueryChain) {
-          try {
-            // Example: Get balance if the prompt is about wallet balance
-            if (lastUserMessage.content.toLowerCase().includes('balance') || 
-                lastUserMessage.content.toLowerCase().includes('how much')) {
-              const addressMatch = lastUserMessage.content.match(/0x[a-fA-F0-9]{40}/);
-              if (addressMatch) {
-                const address = addressMatch[0];
-                const balance = await agentKitService.getBalance(address);
-                context = `On-chain data: The balance of address ${address} is ${balance} ETH.`;
-                
-                // Add the context as a system message
-                messages = [
-                  { role: 'system', content: 'You are a helpful assistant that can also provide on-chain data.' },
-                  { role: 'system', content: context },
-                  ...messages
-                ];
-              }
-            }
-            // Add more on-chain data queries as needed
-          } catch (error) {
-            console.error('Error fetching on-chain data:', error);
-            context = 'Error fetching on-chain data.';
-          }
-        }
-      }
-
-      const response = await this.openai.chat.completions.create({
+      const completion = await this.openai.chat.completions.create({
         model,
         messages,
         max_tokens: maxTokens,
-        temperature: 0.7,
       });
-
-      return {
-        id: response.id,
-        object: 'chat.completion',
-        created: response.created,
-        model: response.model,
-        choices: response.choices,
-        usage: response.usage,
-      };
+      return completion;
     } catch (error) {
-      console.error('Error in OpenAI chat completion:', error);
-      if (error instanceof Error) {
-        throw new Error(`OpenAI API error: ${error.message}`);
-      }
-      throw new Error(`OpenAI API error: ${String(error)}`);
+      console.error('Error in createChatCompletion:', error);
+      throw error;
     }
   }
 
-  private async needsOnChainData(prompt: string): Promise<boolean> {
-    // Simple check for common on-chain data requests
+  async needsOnChainData(prompt: string): Promise<boolean> {
     const onChainKeywords = [
-      'balance', 'transaction', 'block', 'address', 'wallet',
-      'eth', 'ethereum', 'crypto', 'token', 'nft',
-      'how much', 'what is the balance', 'check my', 'show me'
+      'balance', 'transaction', 'block', 'gas', 'fee', 'transfer', 'send', 'receive',
+      'wallet', 'address', 'contract', 'token', 'nft', 'deploy', 'mint', 'burn',
+      'approve', 'allowance', 'swap', 'liquidity', 'pool', 'stake', 'unstake', 'yield',
+      'governance', 'proposal', 'vote', 'delegate', 'validator', 'bridge',
+      'cross-chain', 'withdraw', 'deposit', 'borrow', 'lend', 'collateral',
+      'leverage', 'short', 'long', 'position', 'order', 'trade', 'slippage', 'price',
+      'oracle', 'aggregator', 'index', 'portfolio', 'rebalance', 'harvest', 'claim',
+      'reward', 'incentive', 'airdrop', 'whitelist', 'kyc', 'permission', 'access',
+      'role', 'admin', 'owner', 'upgrade', 'proxy', 'factory', 'router', 'dex', 'amm',
+      'market', 'liquidation', 'health factor', 'debt', 'credit', 'flash loan', 'flashswap',
+      'flash', 'arbitrage', 'mev', 'frontrun', 'backrun', 'sandwich', 'bundle', 'batching',
+      'multicall', 'batch', 'aggregation', 'sign', 'signature', 'message', 'typed data',
+      'eip712', 'eip-712', 'eip 712', 'personal sign', 'eth sign', 'contract interaction',
+      'abi', 'function', 'event', 'log', 'filter', 'query', 'rpc', 'jsonrpc', 'infura',
+      'alchemy', 'quicknode', 'endpoint', 'provider', 'web3', 'ethers', 'web3.js',
+      'ethers.js', 'web3py', 'web3j', 'web3swift', 'web3dart', 'viem'
     ];
-    
+
     const promptLower = prompt.toLowerCase();
-    return onChainKeywords.some(keyword => promptLower.includes(keyword));
+    return onChainKeywords.some(keyword => 
+      promptLower.includes(keyword.toLowerCase())
+    );
   }
 }
 
 // Export a singleton instance
-export const openaiService = new OpenAIService();
+export const openaiService = OpenAIService.getInstance();

@@ -1,16 +1,50 @@
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'Reason:', reason);
-  // Optionally exit with a non-zero code
-  // process.exit(1);
-});
-
 // Load environment variables first
 import { config } from 'dotenv';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
-// These imports must come after environment variables are loaded
+// Get directory name for ES modules first
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Debug current working directory
+console.log('Current working directory:', process.cwd());
+console.log('__dirname:', __dirname);
+
+// Get the project root directory (one level up from the api directory)
+const projectRoot = resolve(__dirname, '..');
+console.log('Project root:', projectRoot);
+
+// Explicitly load .env file from the project root
+const envPath = resolve(projectRoot, '.env');
+console.log('Attempting to load .env from:', envPath);
+
+// Load the environment variables
+const result = config({ path: envPath });
+
+if (result.error) {
+  console.error('Failed to load .env file:', result.error);
+} else {
+  console.log('Successfully loaded .env file');
+}
+
+// Debug log environment variables
+console.log('Environment variables:', {
+  NODE_ENV: process.env.NODE_ENV,
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '***' + process.env.OPENAI_API_KEY.slice(-4) : 'undefined',
+  CDP_API_KEY_ID: process.env.CDP_API_KEY_ID ? '***' + process.env.CDP_API_KEY_ID.slice(-4) : 'undefined',
+  CDP_API_KEY_SECRET: process.env.CDP_API_KEY_SECRET ? '***' + process.env.CDP_API_KEY_SECRET.slice(-4) : 'undefined',
+  CDP_WALLET_SECRET: process.env.CDP_WALLET_SECRET ? '***' + process.env.CDP_WALLET_SECRET.slice(-4) : 'undefined'
+});
+
+// Now import other dependencies after environment variables are loaded
+console.log('Before importing Fastify and other dependencies');
+console.log('Environment variables at this point:', {
+  NODE_ENV: process.env.NODE_ENV,
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '***' + process.env.OPENAI_API_KEY.slice(-4) : 'undefined'
+});
+
+// Import Fastify and other dependencies
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import fastifyCors, { type FastifyCorsOptions } from '@fastify/cors';
 import { CdpClient } from '@coinbase/cdp-sdk';
@@ -19,54 +53,29 @@ import { CdpClient } from '@coinbase/cdp-sdk';
 import { Client } from "@gradio/client";
 import { ethers } from 'ethers';
 import { readFile } from 'fs/promises';
-import { agentKitService } from '../services/agentKitService.js';
+
+console.log('Before importing services');
+console.log('Environment variables before service imports:', {
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '***' + process.env.OPENAI_API_KEY.slice(-4) : 'undefined'
+});
+
+// Import services after environment variables are loaded
+console.log('Importing services...');
 import { openaiService } from '../services/openaiService.js';
+import { agentKitService } from '../services/agentKitService.js';
 import { mastraService } from '../services/mastraService.js';
 
-// Debug current working directory
-console.log('Current working directory:', process.cwd());
+// Initialize services
+openaiService.initialize();
 
-// Get directory name for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-console.log('Current file directory:', __dirname);
+console.log('All services imported');
 
-// Try multiple possible .env file locations
-const possibleEnvPaths = [
-  resolve(process.cwd(), '.env'),                // Project root
-  resolve(__dirname, '../../.env'),            // Two levels up from api/
-  resolve(process.cwd(), '..', '.env'),        // One level up
-  resolve(process.cwd(), '../..', '.env'),     // Two levels up
-];
-
-let envPath = '';
-for (const path of possibleEnvPaths) {
-  try {
-    const result = config({ path });
-    if (!result.error) {
-      envPath = path;
-      break;
-    } else if (result.error) {
-      console.log(`Error loading .env from ${path}:`, result.error.message);
-    }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.log(`Failed to load .env from ${path}:`, errorMessage);
-  }
-}
-
-if (!envPath) {
-  console.error('Failed to load .env file from any location');
-} else {
-  console.log('Successfully loaded .env from:', envPath);
-}
-
-// Debug log environment loading
-console.log('Environment variables loaded:', Object.keys(process.env).filter(key => 
-  key.startsWith('CDP_') || 
-  key.startsWith('ALCHEMY_') ||
-  key === 'NODE_ENV'
-));
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'Reason:', reason);
+  // Optionally exit with a non-zero code
+  // process.exit(1);
+});
 
 // Verify CDP environment variables are set
 const requiredVars = ['CDP_API_KEY_ID', 'CDP_API_KEY_SECRET', 'CDP_WALLET_SECRET'];
