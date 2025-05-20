@@ -21,6 +21,7 @@ import { ethers } from 'ethers';
 import { readFile } from 'fs/promises';
 import { agentKitService } from '../services/agentKitService.js';
 import { openaiService } from '../services/openaiService.js';
+import { mastraService } from '../services/mastraService.js';
 
 // Debug current working directory
 console.log('Current working directory:', process.cwd());
@@ -896,6 +897,49 @@ app.post<{ Body: OpenAIChatCompletionRequest }>('/v1/chat/completions', async (r
     return reply.status(500).send({ 
       error: 'Failed to create chat completion', 
       details: errorMessage 
+    });
+  }
+});
+
+// Test route
+app.get('/test', async (req, reply) => {
+  return { success: true, message: 'Test route is working' };
+});
+
+// Mastra A2A API routes
+app.post<{ Body: { agentId: string; message: string } }>('/api/mastra/message', async (req, reply) => {
+  console.log('Mastra route hit!', { url: req.url, method: req.method, body: req.body });
+  try {
+    const { agentId, message } = req.body;
+    console.log('Processing Mastra request:', { agentId, message });
+    
+    if (!agentId || !message) {
+      return reply.status(400).send({
+        success: false,
+        error: 'agentId and message are required',
+      });
+    }
+
+    const result = await mastraService.sendMessage(agentId, message);
+    
+    if (!result.success) {
+      return reply.status(500).send({
+        success: false,
+        error: result.error || 'Failed to send message to agent',
+      });
+    }
+
+    return reply.send({
+      success: true,
+      data: result.data,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error in Mastra A2A endpoint:', error);
+    return reply.status(500).send({
+      success: false,
+      error: 'Failed to process Mastra A2A request',
+      details: errorMessage,
     });
   }
 });
