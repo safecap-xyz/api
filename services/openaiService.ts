@@ -59,7 +59,13 @@ class OpenAIService {
     }
   }
 
-  async createChatCompletion(messages: any[], model: string = 'gpt-3.5-turbo', maxTokens: number = 1000): Promise<any> {
+  async createChatCompletion(
+    messages: any[],
+    model: string = 'gpt-3.5-turbo',
+    maxTokens: number = 1000,
+    functions?: any[],
+    functionCall: 'none' | 'auto' | { name: string } = 'auto'
+  ): Promise<any> {
     if (!this.isServiceInitialized() || !this.openai) {
       throw new Error('OpenAI service is not initialized');
     }
@@ -69,11 +75,76 @@ class OpenAIService {
         model,
         messages,
         max_tokens: maxTokens,
+        functions,
+        function_call: functionCall,
       });
+      
+      const response = completion.choices[0].message;
+      
+      // Handle function calling
+      if (response.function_call) {
+        const functionName = response.function_call.name;
+        const functionArgs = JSON.parse(response.function_call.arguments || '{}');
+        
+        // Call the appropriate function based on the name
+        const functionResponse = await this.executeFunction(functionName, functionArgs);
+        
+        // Add the function response to the messages
+        messages.push({
+          role: 'assistant',
+          content: null,
+          function_call: response.function_call
+        });
+        
+        messages.push({
+          role: 'function',
+          name: functionName,
+          content: JSON.stringify(functionResponse)
+        });
+        
+        // Get a new completion with the function response
+        return this.createChatCompletion(messages, model, maxTokens, functions, functionCall);
+      }
+      
       return completion;
     } catch (error) {
       console.error('Error in createChatCompletion:', error);
       throw error;
+    }
+  }
+  
+  // Execute a function based on its name and arguments
+  private async executeFunction(name: string, args: Record<string, any>): Promise<any> {
+    try {
+      switch (name) {
+        case 'get_balance':
+          const balance = await agentKitService.getBalance(args.address);
+          return { 
+            address: args.address, 
+            balance: balance,
+            unit: 'ETH',
+            timestamp: new Date().toISOString()
+          };
+          
+        case 'get_gas_price':
+          const gasPrice = await agentKitService.getGasPrice();
+          return gasPrice;
+          
+        case 'get_block_number':
+          const blockNumber = await agentKitService.getBlockNumber();
+          return { blockNumber };
+          
+        case 'get_network_info':
+          const networkInfo = await agentKitService.executeAction('getNetworkInfo');
+          return networkInfo;
+          
+        default:
+          throw new Error(`Function ${name} not implemented`);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`Error executing function ${name}:`, errorMessage);
+      return { error: errorMessage };
     }
   }
 

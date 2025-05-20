@@ -896,13 +896,77 @@ app.post<{ Body: OpenAICompletionRequest }>('/v1/completions', async (req, reply
   }
 });
 
+// Define available functions for the AI to call
+const availableFunctions = [
+  {
+    name: 'get_balance',
+    description: 'Get the ETH balance of an Ethereum address',
+    parameters: {
+      type: 'object',
+      properties: {
+        address: {
+          type: 'string',
+          description: 'The Ethereum address to check the balance of',
+        },
+      },
+      required: ['address'],
+    },
+  },
+  {
+    name: 'get_gas_price',
+    description: 'Get the current gas price on the Ethereum network',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'get_block_number',
+    description: 'Get the current block number of the Ethereum network',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'get_network_info',
+    description: 'Get information about the current Ethereum network',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+];
+
 app.post<{ Body: OpenAIChatCompletionRequest }>('/v1/chat/completions', async (req, reply) => {
   try {
     const { messages, model, max_tokens } = req.body;
-    const result = await openaiService.createChatCompletion(messages, model, max_tokens);
+    
+    // Check if we need to use function calling
+    const lastMessage = messages[messages.length - 1];
+    const shouldUseFunctions = await openaiService.needsOnChainData(
+      typeof lastMessage.content === 'string' ? lastMessage.content : ''
+    );
+    
+    let result;
+    if (shouldUseFunctions) {
+      // Use function calling
+      result = await openaiService.createChatCompletion(
+        messages,
+        model,
+        max_tokens,
+        availableFunctions,
+        'auto' as const
+      );
+    } else {
+      // Regular chat completion
+      result = await openaiService.createChatCompletion(messages, model, max_tokens);
+    }
+    
     return result;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error in chat completion:', error);
     return reply.status(500).send({ 
       error: 'Failed to create chat completion', 
       details: errorMessage 
