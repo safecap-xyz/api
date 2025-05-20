@@ -15,7 +15,8 @@
     "isolatedModules": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["api/*"]
+      "@/*": ["api/*"],
+      "@services/*": ["services/*"]
     }
   },
   "ts-node": {
