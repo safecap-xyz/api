@@ -45,15 +45,81 @@ console.log('Environment variables at this point:', {
 });
 
 // Import Fastify and other dependencies
+// Get directory name for ES modules first
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Debug current working directory
+console.log('Current working directory:', process.cwd());
+console.log('__dirname:', __dirname);
+
+// Get the project root directory (one level up from the api directory)
+const projectRoot = resolve(__dirname, '..');
+console.log('Project root:', projectRoot);
+
+// Explicitly load .env file from the project root
+const envPath = resolve(projectRoot, '.env');
+console.log('Attempting to load .env from:', envPath);
+
+// Load the environment variables
+const result = config({ path: envPath });
+
+if (result.error) {
+  console.error('Failed to load .env file:', result.error);
+} else {
+  console.log('Successfully loaded .env file');
+}
+
+// Debug log environment variables
+console.log('Environment variables:', {
+  NODE_ENV: process.env.NODE_ENV,
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '***' + process.env.OPENAI_API_KEY.slice(-4) : 'undefined',
+  CDP_API_KEY_ID: process.env.CDP_API_KEY_ID ? '***' + process.env.CDP_API_KEY_ID.slice(-4) : 'undefined',
+  CDP_API_KEY_SECRET: process.env.CDP_API_KEY_SECRET ? '***' + process.env.CDP_API_KEY_SECRET.slice(-4) : 'undefined',
+  CDP_WALLET_SECRET: process.env.CDP_WALLET_SECRET ? '***' + process.env.CDP_WALLET_SECRET.slice(-4) : 'undefined'
+});
+
+// Now import other dependencies after environment variables are loaded
+console.log('Before importing Fastify and other dependencies');
+console.log('Environment variables at this point:', {
+  NODE_ENV: process.env.NODE_ENV,
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '***' + process.env.OPENAI_API_KEY.slice(-4) : 'undefined'
+});
+
+// Import Fastify and other dependencies
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import fastifyCors, { type FastifyCorsOptions } from '@fastify/cors';
 import { CdpClient } from '@coinbase/cdp-sdk';
+// import { AgentKit } from '@coinbase/agentkit';
+// import { CdpV2EvmWalletProvider } from '@coinbase/agentkit/wallets/cdp-v2-evm-wallet-provider';
 // import { AgentKit } from '@coinbase/agentkit';
 // import { CdpV2EvmWalletProvider } from '@coinbase/agentkit/wallets/cdp-v2-evm-wallet-provider';
 import { Client } from "@gradio/client";
 import { ethers } from 'ethers';
 import { readFile } from 'fs/promises';
 
+console.log('Before importing services');
+console.log('Environment variables before service imports:', {
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '***' + process.env.OPENAI_API_KEY.slice(-4) : 'undefined'
+});
+
+// Import services after environment variables are loaded
+console.log('Importing services...');
+import { openaiService } from '../services/openaiService.js';
+import { agentKitService } from '../services/agentKitService.js';
+import { mastraService } from '../services/mastraService.js';
+
+// Initialize services
+openaiService.initialize();
+
+console.log('All services imported');
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'Reason:', reason);
+  // Optionally exit with a non-zero code
+  // process.exit(1);
+});
 console.log('Before importing services');
 console.log('Environment variables before service imports:', {
   OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '***' + process.env.OPENAI_API_KEY.slice(-4) : 'undefined'
@@ -191,6 +257,26 @@ try {
     console.warn('Please set CDP_API_KEY_ID, CDP_API_KEY_SECRET, and CDP_WALLET_SECRET in your .env file');
   }
 
+// Initialize AgentKit service
+let agentKitInitialized = false;
+
+try {
+  // Initialize AgentKit with CDP credentials
+  if (process.env.CDP_API_KEY_ID && process.env.CDP_API_KEY_SECRET && process.env.CDP_WALLET_SECRET) {
+    agentKitService.initialize()
+      .then(() => {
+        agentKitInitialized = true;
+        console.log('AgentKit service initialized successfully with CDP credentials');
+      })
+      .catch((error: unknown) => {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('Failed to initialize AgentKit service with CDP credentials:', errorMessage);
+      });
+  } else {
+    console.warn('Missing required CDP environment variables. AgentKit functionality will be disabled.');
+    console.warn('Please set CDP_API_KEY_ID, CDP_API_KEY_SECRET, and CDP_WALLET_SECRET in your .env file');
+  }
+
   if (!process.env.CDP_API_KEY_ID || !process.env.CDP_API_KEY_SECRET || !process.env.CDP_WALLET_SECRET) {
     console.warn('Missing one or more required CDP environment variables. CDP functionality will be disabled.');
     console.warn('Please set CDP_API_KEY_ID, CDP_API_KEY_SECRET, and CDP_WALLET_SECRET in your .env file');
@@ -235,6 +321,22 @@ interface AgentKitExecuteResponse {
   error?: string;
 }
 
+interface AgentKitAccountInfo {
+  ownerAddress: string;
+  smartAccountAddress: string;
+}
+
+interface AgentKitExecuteRequest {
+  action: string;
+  params?: Record<string, unknown>;
+}
+
+interface AgentKitExecuteResponse {
+  success: boolean;
+  result?: unknown;
+  error?: string;
+}
+
 app.post<{ Body: SampleUserOperationRequest }>('/api/sample-user-operation', async (req, reply) => {
   // ... existing code ...
   try {
@@ -242,6 +344,115 @@ app.post<{ Body: SampleUserOperationRequest }>('/api/sample-user-operation', asy
   } catch (error) {
     console.error('Error sending sample user operation:', error);
     reply.code(500).send({ error: (error as Error).message || 'Failed to send sample user operation' });
+  }
+});
+
+// AgentKit API Routes
+app.get('/api/agentkit/account', async (req: FastifyRequest, reply: FastifyReply) => {
+  if (!agentKitInitialized) {
+    return reply.status(503).send({ error: 'AgentKit service is not initialized' });
+  }
+  
+  try {
+    const accountInfo = await agentKitService.getAccountInfo();
+    return accountInfo;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ error: 'Failed to get AgentKit account info', details: errorMessage });
+  }
+});
+
+// Get network information
+app.get('/api/agentkit/network', async (req: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const networkInfo = await agentKitService.getNetworkInfo();
+    return networkInfo;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ 
+      error: 'Failed to get network information', 
+      details: errorMessage 
+    });
+  }
+});
+
+// Get current gas price
+app.get('/api/agentkit/gas-price', async (req: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const gasPrice = await agentKitService.getGasPrice();
+    return gasPrice;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ 
+      error: 'Failed to get gas price', 
+      details: errorMessage 
+    });
+  }
+});
+
+// Get current block number
+app.get('/api/agentkit/block-number', async (req: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const blockNumber = await agentKitService.getBlockNumber();
+    return { blockNumber };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ 
+      error: 'Failed to get block number', 
+      details: errorMessage 
+    });
+  }
+});
+
+// Get balance of an address in ETH
+app.get<{ Querystring: { address: string } }>('/api/agentkit/balance', async (req, reply) => {
+  if (!agentKitInitialized) {
+    return reply.status(503).send({ error: 'AgentKit service is not initialized' });
+  }
+  
+  const { address } = req.query;
+  
+  if (!address) {
+    return reply.status(400).send({ error: 'Address is required' });
+  }
+  
+  try {
+    const balance = await agentKitService.getBalance(address);
+    return { 
+      address,
+      balance,
+      unit: 'ETH'
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ 
+      error: 'Failed to get balance', 
+      details: errorMessage 
+    });
+  }
+});
+
+app.post<{ Body: AgentKitExecuteRequest }>('/api/agentkit/execute', async (req, reply) => {
+  if (!agentKitInitialized) {
+    return reply.status(503).send({ error: 'AgentKit service is not initialized' });
+  }
+  
+  const { action, params } = req.body;
+  
+  if (!action) {
+    return reply.status(400).send({ error: 'Action is required' });
+  }
+
+  try {
+    const result = await agentKitService.executeAction(action, params || {});
+    return { success: true, result };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ 
+      success: false, 
+      error: `Failed to execute action ${action}`,
+      details: errorMessage 
+    });
   }
 });
 
@@ -831,10 +1042,17 @@ const startServer = async (): Promise<string> => {
     const port = Number(process.env.PORT) || 3000;
     const host = process.env.HOST || '0.0.0.0';
     
+    const port = Number(process.env.PORT) || 3000;
+    const host = process.env.HOST || '0.0.0.0';
+    
     const address = await app.listen({
       port,
       host,
+      port,
+      host,
     });
+    
+    console.log(`Server is running at ${address}`);
     
     console.log(`Server is running at ${address}`);
     
