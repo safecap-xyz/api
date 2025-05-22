@@ -1,67 +1,81 @@
+// Load environment variables first
+import { config } from 'dotenv';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+// Get directory name for ES modules first
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Debug current working directory
+console.log('Current working directory:', process.cwd());
+console.log('__dirname:', __dirname);
+
+// Get the project root directory (one level up from the api directory)
+const projectRoot = resolve(__dirname, '..');
+console.log('Project root:', projectRoot);
+
+// Explicitly load .env file from the project root
+const envPath = resolve(projectRoot, '.env');
+console.log('Attempting to load .env from:', envPath);
+
+// Load the environment variables
+const result = config({ path: envPath });
+
+if (result.error) {
+  console.error('Failed to load .env file:', result.error);
+} else {
+  console.log('Successfully loaded .env file');
+}
+
+// Debug log environment variables
+console.log('Environment variables:', {
+  NODE_ENV: process.env.NODE_ENV,
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '***' + process.env.OPENAI_API_KEY.slice(-4) : 'undefined',
+  CDP_API_KEY_ID: process.env.CDP_API_KEY_ID ? '***' + process.env.CDP_API_KEY_ID.slice(-4) : 'undefined',
+  CDP_API_KEY_SECRET: process.env.CDP_API_KEY_SECRET ? '***' + process.env.CDP_API_KEY_SECRET.slice(-4) : 'undefined',
+  CDP_WALLET_SECRET: process.env.CDP_WALLET_SECRET ? '***' + process.env.CDP_WALLET_SECRET.slice(-4) : 'undefined'
+});
+
+// Now import other dependencies after environment variables are loaded
+console.log('Before importing Fastify and other dependencies');
+console.log('Environment variables at this point:', {
+  NODE_ENV: process.env.NODE_ENV,
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '***' + process.env.OPENAI_API_KEY.slice(-4) : 'undefined'
+});
+
+// Import Fastify and other dependencies
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
+import fastifyCors, { type FastifyCorsOptions } from '@fastify/cors';
+import { CdpClient } from '@coinbase/cdp-sdk';
+// import { AgentKit } from '@coinbase/agentkit';
+// import { CdpV2EvmWalletProvider } from '@coinbase/agentkit/wallets/cdp-v2-evm-wallet-provider';
+import { Client } from "@gradio/client";
+import { ethers } from 'ethers';
+import { readFile } from 'fs/promises';
+
+console.log('Before importing services');
+console.log('Environment variables before service imports:', {
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '***' + process.env.OPENAI_API_KEY.slice(-4) : 'undefined'
+});
+
+// Import services after environment variables are loaded
+console.log('Importing services...');
+import { openaiService } from '../services/openaiService.js';
+import { agentKitService } from '../services/agentKitService.js';
+import { mastraService } from '../services/mastraService.js';
+
+// Initialize services
+openaiService.initialize();
+
+console.log('All services imported');
+
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'Reason:', reason);
   // Optionally exit with a non-zero code
   // process.exit(1);
 });
-
-// Load environment variables first
-import { config } from 'dotenv';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
-
-// These imports must come after environment variables are loaded
-import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
-import fastifyCors, { type FastifyCorsOptions } from '@fastify/cors';
-import { CdpClient } from '@coinbase/cdp-sdk';
-import { Client } from "@gradio/client";
-import { ethers } from 'ethers';
-import { readFile } from 'fs/promises';
-
-// Debug current working directory
-console.log('Current working directory:', process.cwd());
-
-// Get directory name for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-console.log('Current file directory:', __dirname);
-
-// Try multiple possible .env file locations
-const possibleEnvPaths = [
-  resolve(process.cwd(), '.env'),                // Project root
-  resolve(__dirname, '../../.env'),            // Two levels up from api/
-  resolve(process.cwd(), '..', '.env'),        // One level up
-  resolve(process.cwd(), '../..', '.env'),     // Two levels up
-];
-
-let envPath = '';
-for (const path of possibleEnvPaths) {
-  try {
-    const result = config({ path });
-    if (!result.error) {
-      envPath = path;
-      break;
-    } else if (result.error) {
-      console.log(`Error loading .env from ${path}:`, result.error.message);
-    }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.log(`Failed to load .env from ${path}:`, errorMessage);
-  }
-}
-
-if (!envPath) {
-  console.error('Failed to load .env file from any location');
-} else {
-  console.log('Successfully loaded .env from:', envPath);
-}
-
-// Debug log environment loading
-console.log('Environment variables loaded:', Object.keys(process.env).filter(key => 
-  key.startsWith('CDP_') || 
-  key.startsWith('ALCHEMY_') ||
-  key === 'NODE_ENV'
-));
 
 // Verify CDP environment variables are set
 const requiredVars = ['CDP_API_KEY_ID', 'CDP_API_KEY_SECRET', 'CDP_WALLET_SECRET'];
@@ -157,7 +171,26 @@ const NETWORK_CONFIG: NetworkConfigs = {
 // Initialize CDP client with environment variable validation
 let cdpClient: CdpClient | null = null;
 
+// Initialize AgentKit service
+let agentKitInitialized = false;
+
 try {
+  // Initialize AgentKit with CDP credentials
+  if (process.env.CDP_API_KEY_ID && process.env.CDP_API_KEY_SECRET && process.env.CDP_WALLET_SECRET) {
+    agentKitService.initialize()
+      .then(() => {
+        agentKitInitialized = true;
+        console.log('AgentKit service initialized successfully with CDP credentials');
+      })
+      .catch((error: unknown) => {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('Failed to initialize AgentKit service with CDP credentials:', errorMessage);
+      });
+  } else {
+    console.warn('Missing required CDP environment variables. AgentKit functionality will be disabled.');
+    console.warn('Please set CDP_API_KEY_ID, CDP_API_KEY_SECRET, and CDP_WALLET_SECRET in your .env file');
+  }
+
   if (!process.env.CDP_API_KEY_ID || !process.env.CDP_API_KEY_SECRET || !process.env.CDP_WALLET_SECRET) {
     console.warn('Missing one or more required CDP environment variables. CDP functionality will be disabled.');
     console.warn('Please set CDP_API_KEY_ID, CDP_API_KEY_SECRET, and CDP_WALLET_SECRET in your .env file');
@@ -186,6 +219,22 @@ interface ErrorResponse {
   details?: unknown;
 }
 
+interface AgentKitAccountInfo {
+  ownerAddress: string;
+  smartAccountAddress: string;
+}
+
+interface AgentKitExecuteRequest {
+  action: string;
+  params?: Record<string, unknown>;
+}
+
+interface AgentKitExecuteResponse {
+  success: boolean;
+  result?: unknown;
+  error?: string;
+}
+
 app.post<{ Body: SampleUserOperationRequest }>('/api/sample-user-operation', async (req, reply) => {
   // ... existing code ...
   try {
@@ -193,6 +242,115 @@ app.post<{ Body: SampleUserOperationRequest }>('/api/sample-user-operation', asy
   } catch (error) {
     console.error('Error sending sample user operation:', error);
     reply.code(500).send({ error: (error as Error).message || 'Failed to send sample user operation' });
+  }
+});
+
+// AgentKit API Routes
+app.get('/api/agentkit/account', async (req: FastifyRequest, reply: FastifyReply) => {
+  if (!agentKitInitialized) {
+    return reply.status(503).send({ error: 'AgentKit service is not initialized' });
+  }
+  
+  try {
+    const accountInfo = await agentKitService.getAccountInfo();
+    return accountInfo;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ error: 'Failed to get AgentKit account info', details: errorMessage });
+  }
+});
+
+// Get network information
+app.get('/api/agentkit/network', async (req: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const networkInfo = await agentKitService.getNetworkInfo();
+    return networkInfo;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ 
+      error: 'Failed to get network information', 
+      details: errorMessage 
+    });
+  }
+});
+
+// Get current gas price
+app.get('/api/agentkit/gas-price', async (req: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const gasPrice = await agentKitService.getGasPrice();
+    return gasPrice;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ 
+      error: 'Failed to get gas price', 
+      details: errorMessage 
+    });
+  }
+});
+
+// Get current block number
+app.get('/api/agentkit/block-number', async (req: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const blockNumber = await agentKitService.getBlockNumber();
+    return { blockNumber };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ 
+      error: 'Failed to get block number', 
+      details: errorMessage 
+    });
+  }
+});
+
+// Get balance of an address in ETH
+app.get<{ Querystring: { address: string } }>('/api/agentkit/balance', async (req, reply) => {
+  if (!agentKitInitialized) {
+    return reply.status(503).send({ error: 'AgentKit service is not initialized' });
+  }
+  
+  const { address } = req.query;
+  
+  if (!address) {
+    return reply.status(400).send({ error: 'Address is required' });
+  }
+  
+  try {
+    const balance = await agentKitService.getBalance(address);
+    return { 
+      address,
+      balance,
+      unit: 'ETH'
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ 
+      error: 'Failed to get balance', 
+      details: errorMessage 
+    });
+  }
+});
+
+app.post<{ Body: AgentKitExecuteRequest }>('/api/agentkit/execute', async (req, reply) => {
+  if (!agentKitInitialized) {
+    return reply.status(503).send({ error: 'AgentKit service is not initialized' });
+  }
+  
+  const { action, params } = req.body;
+  
+  if (!action) {
+    return reply.status(400).send({ error: 'Action is required' });
+  }
+
+  try {
+    const result = await agentKitService.executeAction(action, params || {});
+    return { success: true, result };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ 
+      success: false, 
+      error: `Failed to execute action ${action}`,
+      details: errorMessage 
+    });
   }
 });
 
@@ -670,11 +828,15 @@ const startServer = async (): Promise<string> => {
     ));
     
     // Start the server
+    const port = Number(process.env.PORT) || 3000;
+    const host = process.env.HOST || '0.0.0.0';
+    
     const address = await app.listen({
-      port: 3000,
-      host: '0.0.0.0',
-      listenTextResolver: (addr) => `Server is running at ${addr}`
+      port,
+      host,
     });
+    
+    console.log(`Server is running at ${address}`);
     
     console.log(`\n🚀 Server started successfully`);
     console.log(`   - Environment: ${process.env.NODE_ENV === 'development' ? 'development' : 'production'}`);
@@ -702,13 +864,376 @@ const startServer = async (): Promise<string> => {
   }
 };
 
-// Only start the server if this file is run directly
-if (process.env.NODE_ENV !== 'test') {
-  startServer()
-    .catch(error => {
-      console.error('Failed to start server:', error);
-      process.exit(1);
+// OpenAI-compatible API interfaces
+interface OpenAICompletionRequest {
+  prompt: string;
+  model?: string;
+  max_tokens?: number;
+}
+
+interface OpenAIChatCompletionRequest {
+  messages: Array<{
+    role: 'user' | 'assistant' | 'system';
+    name?: string;
+    content: string;
+  }>;
+  model?: string;
+  max_tokens?: number;
+}
+
+// OpenAI-compatible API routes
+app.post<{ Body: OpenAICompletionRequest }>('/v1/completions', async (req, reply) => {
+  try {
+    const { prompt, model, max_tokens } = req.body;
+    const result = await openaiService.createCompletion(prompt, model, max_tokens);
+    return result;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return reply.status(500).send({ 
+      error: 'Failed to create completion', 
+      details: errorMessage 
     });
+  }
+});
+
+// Define available functions for the AI to call
+const availableFunctions = [
+  {
+    name: 'get_balance',
+    description: 'Get the ETH balance of an Ethereum address',
+    parameters: {
+      type: 'object',
+      properties: {
+        address: {
+          type: 'string',
+          description: 'The Ethereum address to check the balance of',
+        },
+      },
+      required: ['address'],
+    },
+  },
+  {
+    name: 'get_gas_price',
+    description: 'Get the current gas price on the Ethereum network',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'get_block_number',
+    description: 'Get the current block number of the Ethereum network',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'get_network_info',
+    description: 'Get information about the current Ethereum network',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+];
+
+app.post<{ Body: OpenAIChatCompletionRequest }>('/v1/chat/completions', async (req, reply) => {
+  try {
+    const { messages, model, max_tokens } = req.body;
+    
+    // Check if we need to use function calling
+    const lastMessage = messages[messages.length - 1];
+    const shouldUseFunctions = await openaiService.needsOnChainData(
+      typeof lastMessage.content === 'string' ? lastMessage.content : ''
+    );
+    
+    let result;
+    if (shouldUseFunctions) {
+      // Use function calling
+      result = await openaiService.createChatCompletion(
+        messages,
+        model,
+        max_tokens,
+        availableFunctions,
+        'auto' as const
+      );
+    } else {
+      // Regular chat completion
+      result = await openaiService.createChatCompletion(messages, model, max_tokens);
+    }
+    
+    return result;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error in chat completion:', error);
+    return reply.status(500).send({ 
+      error: 'Failed to create chat completion', 
+      details: errorMessage 
+    });
+  }
+});
+
+// Test route
+app.get('/test', async (req, reply) => {
+  return { success: true, message: 'Test route is working' };
+});
+
+// Replace the existing /api/agent/orchestrate endpoint with this:
+
+// Define the request body type for the orchestration endpoint
+interface OrchestrateRequest {
+  task: string;
+  apiKey: string;
+}
+
+// Agent Orchestration Endpoint with Server-Sent Events
+app.post<{ Body: OrchestrateRequest }>('/api/agent/orchestrate', {
+  schema: {
+    body: {
+      type: 'object',
+      required: ['task', 'apiKey'],
+      properties: {
+        task: { type: 'string' },
+        apiKey: { type: 'string' }
+      }
+    }
+  }
+}, async (request, reply) => {
+  // Set headers for Server-Sent Events
+  reply.raw.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+  });
+
+  const sendEvent = (type: string, data: any) => {
+    const event = { type, data, timestamp: new Date().toISOString() };
+    reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+  };
+
+  try {
+    const { task, apiKey } = request.body;
+
+    // Simple API key validation
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      sendEvent('error', { message: 'Invalid or missing API key' });
+      reply.raw.end();
+      return;
+    }
+
+    if (!task) {
+      sendEvent('error', { message: 'Task is required' });
+      reply.raw.end();
+      return;
+    }
+
+    console.log(`Starting agent orchestration for task: ${task}`);
+    
+    // Agent 1: Get Weather Information
+    sendEvent('status', { message: 'Checking weather information...' });
+
+    // First, let the agent know we want a direct response with weather information
+    const analysisPrompt = `The user has requested: "${task}"
+
+Please provide the current weather information and clothing recommendations.
+
+Respond with a JSON object containing:
+- summary: A friendly summary of the current weather conditions
+- location: The location for the weather query
+- temperature: The current temperature
+- condition: The current weather condition (e.g., sunny, rainy, etc.)
+- recommendations: Clothing recommendations based on the weather
+- reasoning: Brief explanation of your recommendations`;
+
+    // First agent gets the weather data
+    const analysisResponse = await mastraService.sendMessage('example-agent', analysisPrompt);
+    console.log('Agent 1 raw response:', JSON.stringify(analysisResponse, null, 2));
+    
+    if (!analysisResponse.success || !analysisResponse.data) {
+      throw new Error(`Agent 1 failed: ${analysisResponse.error || 'No data returned'}`);
+    }
+
+    // Get the response text or tool calls
+    const responseText = analysisResponse.data.parts?.[0]?.text || '';
+    let weatherInfo;
+    
+    // Check if we have tool calls in the response
+    const toolCalls = (analysisResponse.data as any).tool_calls || [];
+    if (toolCalls.length > 0) {
+      console.log('Tool calls detected, processing...');
+      
+      // Process each tool call
+      const toolResults = [];
+      for (const toolCall of toolCalls) {
+        console.log('Processing tool call:', toolCall);
+        
+        // Simulate tool execution (in a real scenario, you would call the actual tool)
+        if (toolCall.function.name === 'get_weather') {
+          const args = JSON.parse(toolCall.function.arguments);
+          const location = args.location || 'unknown location';
+          
+          // Create a mock weather response
+          const mockWeather = {
+            location: location,
+            temperature: Math.floor(Math.random() * 30) + 60, // Random temp between 60-90°F
+            condition: ['sunny', 'partly cloudy', 'cloudy', 'rainy', 'thunderstorm'][Math.floor(Math.random() * 5)],
+            humidity: Math.floor(Math.random() * 50) + 30, // 30-80% humidity
+            wind_speed: Math.floor(Math.random() * 15) + 5 // 5-20 mph
+          };
+          
+          toolResults.push({
+            tool_call_id: toolCall.id,
+            role: 'tool',
+            name: 'get_weather',
+            content: JSON.stringify(mockWeather)
+          });
+        }
+      }
+      
+      // Send the tool results back to the agent
+      if (toolResults.length > 0) {
+        console.log('Sending tool results back to agent...');
+        const finalResponse = await mastraService.sendMessage('example-agent', '', undefined, toolResults);
+        
+        if (finalResponse.success && finalResponse.data?.parts?.[0]?.text) {
+          // Use the final response from the agent after processing tool calls
+          weatherInfo = {
+            summary: finalResponse.data.parts[0].text,
+            rawResponse: finalResponse.data
+          };
+          console.log('Final agent response after tool calls:', weatherInfo);
+        } else {
+          weatherInfo = {
+            summary: 'Received weather data but could not process final response',
+            rawResponse: finalResponse.data
+          };
+        }
+      } else {
+        weatherInfo = {
+          summary: 'No weather data available',
+          rawResponse: analysisResponse.data
+        };
+      }
+    } else {
+      // No tool calls, just use the text response
+      try {
+        // Try to parse as JSON first
+        weatherInfo = JSON.parse(responseText);
+        console.log('Weather info (direct parse):', weatherInfo);
+      } catch (error) {
+        console.warn('Failed to parse weather info as JSON, using raw response');
+        weatherInfo = {
+          summary: responseText || 'No weather information available',
+          rawResponse: responseText
+        };
+      }
+    }
+
+    // Send the weather info to the client
+    sendEvent('weather_info', weatherInfo);
+
+    // If we have weather data, ask the second agent for clothing recommendations
+    if (weatherInfo.summary && weatherInfo.summary !== 'Unable to get weather information') {
+      sendEvent('status', { message: 'Getting clothing recommendations...' });
+
+      const clothingPrompt = `Based on the following weather information:
+  ${weatherInfo.summary}
+
+  Please provide clothing recommendations. Be specific and consider the conditions.
+  Respond with a JSON object containing:
+  - recommendations: Array of specific clothing items
+  - reasoning: Brief explanation of your recommendations
+  - additionalTips: Any other relevant advice`;
+
+      const clothingResponse = await mastraService.sendMessage('contentCreatorAgent', clothingPrompt);
+      
+      if (clothingResponse.success && clothingResponse.data?.parts?.[0]?.text) {
+        try {
+          const clothingData = JSON.parse(clothingResponse.data.parts[0].text);
+          sendEvent('clothing_recommendations', clothingData);
+        } catch (e) {
+          console.warn('Failed to parse clothing recommendations:', e);
+          sendEvent('clothing_recommendations', {
+            error: 'Failed to process clothing recommendations',
+            rawResponse: clothingResponse.data.parts[0].text
+          });
+        }
+      }
+    }
+
+    sendEvent('complete', { message: 'Task completed successfully' });
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error in agent orchestration:', error);
+    sendEvent('error', { 
+      message: `Orchestration failed: ${errorMessage}` 
+    });
+  } finally {
+    reply.raw.end();
+  }
+});
+
+// Mastra A2A API routes
+app.post<{ Body: { agentId: string; message: string } }>('/api/mastra/message', async (req, reply) => {
+  console.log('Mastra route hit!', { url: req.url, method: req.method, body: req.body });
+  try {
+    const { agentId, message } = req.body;
+    console.log('Processing Mastra request:', { agentId, message });
+    
+    if (!agentId || !message) {
+      return reply.status(400).send({
+        success: false,
+        error: 'agentId and message are required',
+      });
+    }
+
+    const result = await mastraService.sendMessage(agentId, message);
+    
+    if (!result.success) {
+      return reply.status(500).send({
+        success: false,
+        error: result.error || 'Failed to send message to agent',
+      });
+    }
+
+    return reply.send({
+      success: true,
+      data: result.data,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error in Mastra A2A endpoint:', error);
+    return reply.status(500).send({
+      success: false,
+      error: 'Failed to process Mastra A2A request',
+      details: errorMessage,
+    });
+  }
+});
+
+// Start the server if this file is run directly
+const isTest = process.env.NODE_ENV === 'test';
+const isJest = process.env.JEST_WORKER_ID !== undefined;
+
+if (!isTest && !isJest) {
+  console.log('Starting server in', process.env.NODE_ENV || 'development', 'mode...');
+  
+  // Add a small delay to ensure all async operations are ready
+  setTimeout(() => {
+    startServer()
+      .then(address => {
+        console.log(`Server started successfully at ${address}`);
+      })
+      .catch(error => {
+        console.error('Failed to start server:');
+        console.error(error);
+        process.exit(1);
+      });
+  }, 100);
+} else {
+  console.log('Skipping server start in test environment');
 }
 
 // Export the Fastify server for serverless environments
