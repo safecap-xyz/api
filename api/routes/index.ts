@@ -5,6 +5,7 @@ import { FastifyInstance } from 'fastify';
 import { registerAgentKitRoutes } from './agentkit.js';
 import { registerCampaignRoutes } from './campaigns.js';
 import { registerOpenAIRoutes } from './openai.js';
+import { registerTransactionRoutes } from './transactions.js';
 
 /**
  * Register all application routes
@@ -15,6 +16,7 @@ export function registerRoutes(app: FastifyInstance) {
   registerAgentKitRoutes(app);
   registerCampaignRoutes(app);
   registerOpenAIRoutes(app);
+  registerTransactionRoutes(app);
   
   // Define a health check route
   app.get('/api/health', async () => {
