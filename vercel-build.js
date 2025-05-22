@@ -66,15 +66,27 @@ async function build() {
       });
     }
     
-    // Copy services directory from source to include .d.ts files
+    // Copy original TS services directory to ensure .js extensions work
     const servicesSrc = path.join(process.cwd(), 'services');
-    const servicesDest = path.join(apiOutputDir, 'services');
+    const servicesDest = path.join(apiOutputDir, '..', 'services');
     
     if (await exists(servicesSrc)) {
       console.log(`Copying services from ${servicesSrc} to ${servicesDest}`);
       await copyDir(servicesSrc, servicesDest, {
         filter: (filename) => {
-          return filename.endsWith('.d.ts') || filename.endsWith('.json');
+          // Include all service files
+          return true;
+        }
+      });
+    }
+
+    // Copy the compiled service files too
+    const compiledServicesSrc = path.join(process.cwd(), '.vercel', 'output', 'functions', 'services');
+    if (await exists(compiledServicesSrc)) {
+      console.log(`Copying compiled services from ${compiledServicesSrc} to ${servicesDest}`);
+      await copyDir(compiledServicesSrc, servicesDest, {
+        filter: (filename) => {
+          return filename.endsWith('.js') || filename.endsWith('.d.ts') || filename.endsWith('.json');
         }
       });
     }

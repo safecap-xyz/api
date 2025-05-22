@@ -34,7 +34,8 @@
       "./node_modules/@types",
       "./types"
     ],
-    "composite": true
+    "composite": true,
+    "verbatimModuleSyntax": false
   },
   "ts-node": {
     "esm": true,

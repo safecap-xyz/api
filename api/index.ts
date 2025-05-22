@@ -60,9 +60,9 @@ console.log('Environment variables before service imports:', {
 
 // Import services after environment variables are loaded
 console.log('Importing services...');
-import { openaiService } from '../services/openaiService';
-import { agentKitService } from '../services/agentKitService';
-import { mastraService } from '../services/mastraService';
+import { openaiService } from '../services/openaiService.js';
+import { agentKitService } from '../services/agentKitService.js';
+import { mastraService } from '../services/mastraService.js';
 
 // Initialize services
 openaiService.initialize();
