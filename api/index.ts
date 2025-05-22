@@ -1360,6 +1360,13 @@ app.post<{ Body: { agentId: string; message: string } }>('/api/mastra/message', 
 const isTest = process.env.NODE_ENV === 'test';
 const isJest = process.env.JEST_WORKER_ID !== undefined;
 
+// Serverless handler function
+const handler = async (req: any, reply: any) => {
+  await app.ready();
+  app.server.emit('request', req, reply);
+};
+
+// Start the server in non-test environments
 if (!isTest && !isJest) {
   console.log('Starting server in', process.env.NODE_ENV || 'development', 'mode...');
   
@@ -1379,8 +1386,5 @@ if (!isTest && !isJest) {
   console.log('Skipping server start in test environment');
 }
 
-// Export the Fastify server for serverless environments
-export default async function handler(req: any, reply: any) {
-  await app.ready();
-  app.server.emit('request', req, reply);
-}
+// Export the handler for serverless environments
+export default handler;
