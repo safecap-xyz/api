@@ -26,10 +26,14 @@ import type { Campaign } from './types/campaigns.js';
 // Log environment status
 console.log(`Starting in ${isDevelopment() ? 'development' : 'production'} mode`);
 
+// Check if we're in a production environment (AWS Lambda/Vercel)
+const isProductionDeployment = process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL || process.env.NODE_ENV === 'production';
+
 // Create Fastify instance with logging configuration
 const app: FastifyInstance = Fastify({
-  logger: isDevelopment() 
-    ? {
+  logger: isProductionDeployment 
+    ? true // Use the simplest possible logger in production
+    : {
         level: 'debug',
         transport: {
           target: 'pino-pretty',
@@ -38,8 +42,7 @@ const app: FastifyInstance = Fastify({
             ignore: 'pid,hostname'
           }
         }
-      } 
-    : { level: 'info' }, // Simple logger config for production
+      },
   
   ajv: {
     customOptions: {
