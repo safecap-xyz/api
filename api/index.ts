@@ -189,26 +189,6 @@ try {
     console.warn('Please set CDP_API_KEY_ID, CDP_API_KEY_SECRET, and CDP_WALLET_SECRET in your .env file');
   }
 
-// Initialize AgentKit service
-let agentKitInitialized = false;
-
-try {
-  // Initialize AgentKit with CDP credentials
-  if (process.env.CDP_API_KEY_ID && process.env.CDP_API_KEY_SECRET && process.env.CDP_WALLET_SECRET) {
-    agentKitService.initialize()
-      .then(() => {
-        agentKitInitialized = true;
-        console.log('AgentKit service initialized successfully with CDP credentials');
-      })
-      .catch((error: unknown) => {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error('Failed to initialize AgentKit service with CDP credentials:', errorMessage);
-      });
-  } else {
-    console.warn('Missing required CDP environment variables. AgentKit functionality will be disabled.');
-    console.warn('Please set CDP_API_KEY_ID, CDP_API_KEY_SECRET, and CDP_WALLET_SECRET in your .env file');
-  }
-
   if (!process.env.CDP_API_KEY_ID || !process.env.CDP_API_KEY_SECRET || !process.env.CDP_WALLET_SECRET) {
     console.warn('Missing one or more required CDP environment variables. CDP functionality will be disabled.');
     console.warn('Please set CDP_API_KEY_ID, CDP_API_KEY_SECRET, and CDP_WALLET_SECRET in your .env file');
@@ -1356,17 +1336,10 @@ app.post<{ Body: { agentId: string; message: string } }>('/api/mastra/message', 
   }
 });
 
-// Start the server if this file is run directly
+// Start the server if not in test environment
 const isTest = process.env.NODE_ENV === 'test';
 const isJest = process.env.JEST_WORKER_ID !== undefined;
 
-// Serverless handler function
-const handler = async (req: any, reply: any) => {
-  await app.ready();
-  app.server.emit('request', req, reply);
-};
-
-// Start the server in non-test environments
 if (!isTest && !isJest) {
   console.log('Starting server in', process.env.NODE_ENV || 'development', 'mode...');
   
@@ -1386,5 +1359,11 @@ if (!isTest && !isJest) {
   console.log('Skipping server start in test environment');
 }
 
-// Export the handler for serverless environments
-export default handler;
+// Serverless handler function
+export default async function handler(req: any, reply: any) {
+  await app.ready();
+  app.server.emit('request', req, reply);
+}
+
+// Export an empty object to satisfy TypeScript module system
+export {};
