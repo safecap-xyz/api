@@ -74,6 +74,14 @@ async function build() {
     const servicesOutputDir = path.join(vercelFunctionsDir, 'services');
     await mkdir(servicesOutputDir, { recursive: true });
     
+    // Create re-export files in the services directory to fix module resolution issues
+    const serviceFiles = ['openaiService', 'blockchainService', 'agentKitService'];
+    for (const service of serviceFiles) {
+      const reExportContent = `// Re-export from api/services to fix module resolution issues\nexport * from '../api/services/${service}.js';`;
+      await writeFile(path.join(servicesOutputDir, `${service}.js`), reExportContent, 'utf8');
+      console.log(`Created re-export file for ${service}`);
+    }
+    
     // Copy the source TypeScript files to the output directory
     // This ensures that the imports with .js extensions will work correctly
     const apiSrcDir = path.join(process.cwd(), 'api');
@@ -121,10 +129,10 @@ async function build() {
           .replace(/interface\s+[^{]+\{[^}]*\}/g, '')
           // Remove type declarations
           .replace(/type\s+[^=]+=\s*[^;]+;/g, '')
-          // Fix imports to add .js extension
-          .replace(/from\s+['"]([^\'"]+)['"](?![\s]*\.[a-zA-Z0-9]+['"])/g, (match, p1) => {
-            // Only add .js to relative imports
-            if (p1.startsWith('.')) {
+          // Fix imports to add .js extension without duplicating
+          .replace(/from\s+['"]([^'"]+)['"]((?![\s]*\.[a-zA-Z0-9]+['"]))/g, (match, p1) => {
+            // Only add .js to relative imports that don't already have an extension
+            if (p1.startsWith('.') && !p1.endsWith('.js')) {
               return `from '${p1}.js'`;
             }
             return match;
