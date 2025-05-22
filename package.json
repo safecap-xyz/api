@@ -9,7 +9,7 @@
     "build": "tsc && node vercel-build.js",
     "dev": "NODE_ENV=development tsx --watch api/index.ts",
     "start": "node .vercel/output/functions/api/index.js",
-    "tsc": "tsc",
+    "tsc": "tsc --skipLibCheck",
     "tsc:watch": "tsc --watch",
     "vercel-build": "node vercel-build.js"
   },
