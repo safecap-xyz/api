@@ -60,9 +60,14 @@ console.log('Environment variables before service imports:', {
 
 // Import services after environment variables are loaded
 console.log('Importing services...');
-import { openaiService } from '../services/openaiService.js';
-import { agentKitService } from '../services/agentKitService.js';
-import { mastraService } from '../services/mastraService.js';
+// Use dynamic imports for better compatibility with NodeNext module resolution
+const services = await Promise.all([
+  import('../services/openaiService.js').then(module => module.openaiService),
+  import('../services/agentKitService.js').then(module => module.agentKitService),
+  import('../services/mastraService.js').then(module => module.mastraService)
+]);
+
+const [openaiService, agentKitService, mastraService] = services;
 
 // Initialize services
 openaiService.initialize();

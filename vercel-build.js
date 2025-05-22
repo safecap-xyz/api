@@ -39,57 +39,39 @@ async function build() {
   try {
     console.log('Starting build process...');
     
-    // Ensure .vercel/output directory exists
-    const vercelOutputDir = path.join(process.cwd(), '.vercel', 'output', 'functions');
-    const apiOutputDir = path.join(vercelOutputDir, 'api');
+    // Create the base output directory for Vercel
+    const vercelBaseDir = path.join(process.cwd(), '.vercel');
+    const vercelOutputDir = path.join(vercelBaseDir, 'output');
+    const vercelFunctionsDir = path.join(vercelOutputDir, 'functions');
+    const apiOutputDir = path.join(vercelFunctionsDir, 'api');
     
-    // Create necessary directories
+    // Create all necessary directories
+    await mkdir(vercelBaseDir, { recursive: true });
+    await mkdir(vercelOutputDir, { recursive: true });
+    await mkdir(vercelFunctionsDir, { recursive: true });
     await mkdir(apiOutputDir, { recursive: true });
     
-    // First, compile TypeScript files
+    // Create services directory in the output
+    const servicesOutputDir = path.join(vercelFunctionsDir, 'services');
+    await mkdir(servicesOutputDir, { recursive: true });
+    
+    // First copy the source TypeScript files to the output directory
+    // This ensures that the imports with .js extensions will work correctly
+    const apiSrcDir = path.join(process.cwd(), 'api');
+    const servicesSrcDir = path.join(process.cwd(), 'services');
+    
+    console.log(`Copying API source files from ${apiSrcDir} to ${apiOutputDir}`);
+    await copyDir(apiSrcDir, apiOutputDir);
+    
+    console.log(`Copying services source files from ${servicesSrcDir} to ${servicesOutputDir}`);
+    await copyDir(servicesSrcDir, servicesOutputDir);
+    
+    // Now compile TypeScript files in place
     console.log('Compiling TypeScript...');
     execSync('pnpm tsc', { stdio: 'inherit' });
     
-    // Copy compiled JavaScript files from the output directory
-    const compiledDir = path.join(process.cwd(), '.vercel', 'output', 'functions');
-    
-    // Copy api directory
-    const apiSrc = path.join(process.cwd(), '.vercel', 'output', 'functions', 'api');
-    if (await exists(apiSrc)) {
-      console.log(`Copying compiled API files from ${apiSrc} to ${apiOutputDir}`);
-      await copyDir(apiSrc, apiOutputDir, {
-        filter: (filename) => {
-          return filename.endsWith('.js') || 
-                 filename.endsWith('.d.ts') ||
-                 filename.endsWith('.json');
-        }
-      });
-    }
-    
-    // Copy original TS services directory to ensure .js extensions work
-    const servicesSrc = path.join(process.cwd(), 'services');
-    const servicesDest = path.join(apiOutputDir, '..', 'services');
-    
-    if (await exists(servicesSrc)) {
-      console.log(`Copying services from ${servicesSrc} to ${servicesDest}`);
-      await copyDir(servicesSrc, servicesDest, {
-        filter: (filename) => {
-          // Include all service files
-          return true;
-        }
-      });
-    }
-
-    // Copy the compiled service files too
-    const compiledServicesSrc = path.join(process.cwd(), '.vercel', 'output', 'functions', 'services');
-    if (await exists(compiledServicesSrc)) {
-      console.log(`Copying compiled services from ${compiledServicesSrc} to ${servicesDest}`);
-      await copyDir(compiledServicesSrc, servicesDest, {
-        filter: (filename) => {
-          return filename.endsWith('.js') || filename.endsWith('.d.ts') || filename.endsWith('.json');
-        }
-      });
-    }
+    // Handle any files that need to be manually copied to the output directory
+    console.log('Copying additional files...');
     
     // Copy package.json
     const packageJsonPath = path.join(process.cwd(), 'package.json');
@@ -100,7 +82,7 @@ async function build() {
     
     // Write the updated package.json to the functions directory
     await writeFile(
-      path.join(vercelOutputDir, 'package.json'),
+      path.join(vercelFunctionsDir, 'package.json'),
       JSON.stringify(packageJson, null, 2),
       'utf8'
     );
@@ -120,15 +102,62 @@ async function build() {
       ]
     };
     
+    // Generate standard Vercel output configuration
     await writeFile(
       path.join(vercelOutputDir, 'config.json'),
       JSON.stringify(vercelConfig, null, 2),
       'utf8'
     );
     
-    console.log('Build completed successfully!');
+    // Copy node_modules if necessary
+    const nodeModulesSrc = path.join(process.cwd(), 'node_modules');
+    const nodeModulesDest = path.join(vercelFunctionsDir, 'node_modules');
+    
+    if (await exists(nodeModulesSrc)) {
+      console.log('Creating node_modules symlink...');
+      try {
+        // Instead of copying, create a symlink to save space and time
+        await fs.symlink(nodeModulesSrc, nodeModulesDest, 'junction');
+      } catch (err) {
+        console.log('Symlink failed, continuing without node_modules copy');
+      }
+    }
+    
+    // Create a static output directory with a success page
+    const staticDir = path.join(vercelOutputDir, 'static');
+    await mkdir(staticDir, { recursive: true });
+    
+    // Create a basic success page
+    const successHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>SafeCap API</title>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; text-align: center; }
+            h1 { color: #0070f3; }
+            p { color: #333; }
+          </style>
+        </head>
+        <body>
+          <h1>SafeCap API</h1>
+          <p>API server is running. Access the API at /api</p>
+        </body>
+      </html>
+    `;
+    
+    await writeFile(path.join(staticDir, 'index.html'), successHtml, 'utf8');
+    
+    console.log('=====================================================');
+    console.log('🚀 Build completed successfully!');
+    console.log('📁 Output directory: ' + vercelOutputDir);
+    console.log('📋 API files: ' + apiOutputDir);
+    console.log('=====================================================');
   } catch (error) {
-    console.error('Build failed:', error);
+    console.error('❌ Build failed:');
+    console.error(error);
     process.exit(1);
   }
 }
