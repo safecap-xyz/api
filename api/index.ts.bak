@@ -1,114 +1,59 @@
-/**
- * Main API entry point
- */
+// Load environment variables first
 import { config } from 'dotenv';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyReply } from 'fastify';
-import fastifyCors from '@fastify/cors';
 
-// Get directory name for ES modules
+// Get directory name for ES modules first
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Get the project root directory
+// Debug current working directory
+console.log('Current working directory:', process.cwd());
+console.log('__dirname:', __dirname);
+
+// Get the project root directory (one level up from the api directory)
 const projectRoot = resolve(__dirname, '..');
+console.log('Project root:', projectRoot);
 
-// Load environment variables from the project root
+// Explicitly load .env file from the project root
 const envPath = resolve(projectRoot, '.env');
-config({ path: envPath });
+console.log('Attempting to load .env from:', envPath);
 
-// Import modular components
-import { registerRoutes } from './routes/index.js';
-import { isDevelopment, getEnv } from './utils/env.js';
-import type { Campaign } from './types/campaigns.js';
+// Load the environment variables
+const result = config({ path: envPath });
 
-// Log environment status
-console.log(`Starting in ${isDevelopment() ? 'development' : 'production'} mode`);
-
-// Create Fastify instance with logging configuration
-const app: FastifyInstance = Fastify({
-  logger: {
-    level: isDevelopment() ? 'debug' : 'info',
-    transport: isDevelopment() ? {
-      target: 'pino-pretty',
-      options: {
-        translateTime: 'HH:MM:ss Z',
-        ignore: 'pid,hostname'
-      }
-    } : undefined
-  },
-  ajv: {
-    customOptions: {
-      strict: 'log',
-      coerceTypes: true
-    }
-  }
-});
-
-// Database mock for development
-declare module 'fastify' {
-  interface FastifyInstance {
-    db: {
-      campaigns: Campaign[];
-    }
-  }
+if (result.error) {
+  console.error('Failed to load .env file:', result.error);
+} else {
+  console.log('Successfully loaded .env file');
 }
 
-// Add in-memory database for development
-app.decorate('db', {
-  campaigns: [
-    {
-      id: '1',
-      title: 'First Campaign',
-      description: 'This is the first campaign',
-      goal: 1000,
-      raised: 500,
-      creator: '0x123...',
-      backers: 5,
-      deadline: '2025-12-31'
-    }
-  ]
+// Debug log environment variables
+console.log('Environment variables:', {
+  NODE_ENV: process.env.NODE_ENV,
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '***' + process.env.OPENAI_API_KEY.slice(-4) : 'undefined',
+  CDP_API_KEY_ID: process.env.CDP_API_KEY_ID ? '***' + process.env.CDP_API_KEY_ID.slice(-4) : 'undefined',
+  CDP_API_KEY_SECRET: process.env.CDP_API_KEY_SECRET ? '***' + process.env.CDP_API_KEY_SECRET.slice(-4) : 'undefined',
+  CDP_WALLET_SECRET: process.env.CDP_WALLET_SECRET ? '***' + process.env.CDP_WALLET_SECRET.slice(-4) : 'undefined'
 });
 
-// Register CORS plugin
-app.register(fastifyCors, {
-  origin: true, // Allow all origins in development
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+// Now import other dependencies after environment variables are loaded
+console.log('Before importing Fastify and other dependencies');
+console.log('Environment variables at this point:', {
+  NODE_ENV: process.env.NODE_ENV,
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '***' + process.env.OPENAI_API_KEY.slice(-4) : 'undefined'
 });
 
-// Register all routes
-registerRoutes(app);
-
-// Server startup function
-async function startServer(): Promise<string> {
-  try {
-    const port = getEnv('PORT', '3000');
-    const host = getEnv('HOST', '0.0.0.0');
-    
-    const address = await app.listen({ port: parseInt(port), host });
-    console.log(`Server listening at ${address}`);
-    return address;
-  } catch (err) {
-    app.log.error(err);
-    process.exit(1);
-  }
-}
-
-// Start server when running directly (not imported)
-if (import.meta.url === `file://${process.argv[1]}`) {
-  startServer();
-}
-
-// Export for serverless environments
-export const handler = app;
-
+// Import Fastify and other dependencies
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
+import fastifyCors, { type FastifyCorsOptions } from '@fastify/cors';
+import { CdpClient } from '@coinbase/cdp-sdk';
+// import { AgentKit } from '@coinbase/agentkit';
+// import { CdpV2EvmWalletProvider } from '@coinbase/agentkit/wallets/cdp-v2-evm-wallet-provider';
+import { Client } from "@gradio/client";
 import { ethers } from 'ethers';
 import { readFile } from 'fs/promises';
 
-// Log environment variables before service imports
 console.log('Before importing services');
 console.log('Environment variables before service imports:', {
   OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '***' + process.env.OPENAI_API_KEY.slice(-4) : 'undefined'
@@ -116,13 +61,13 @@ console.log('Environment variables before service imports:', {
 
 // Import services after environment variables are loaded
 console.log('Importing services...');
-// Import services directly - this will be transformed to .js by tsc
-import { openaiService } from '../services/openaiService';
-import { agentKitService } from '../services/agentKitService';
-import { mastraService } from '../services/mastraService';
+import { openaiService } from '../services/openaiService.js';
+import { agentKitService } from '../services/agentKitService.js';
+import { mastraService } from '../services/mastraService.js';
 
 // Initialize services
 openaiService.initialize();
+
 console.log('All services imported');
 
 // Handle unhandled promise rejections
@@ -290,22 +235,6 @@ interface AgentKitExecuteResponse {
   error?: string;
 }
 
-interface AgentKitAccountInfo {
-  ownerAddress: string;
-  smartAccountAddress: string;
-}
-
-interface AgentKitExecuteRequest {
-  action: string;
-  params?: Record<string, unknown>;
-}
-
-interface AgentKitExecuteResponse {
-  success: boolean;
-  result?: unknown;
-  error?: string;
-}
-
 app.post<{ Body: SampleUserOperationRequest }>('/api/sample-user-operation', async (req, reply) => {
   // ... existing code ...
   try {
@@ -425,31 +354,6 @@ app.post<{ Body: AgentKitExecuteRequest }>('/api/agentkit/execute', async (req, 
   }
 });
 
-// Get current block number
-app.get<{ Querystring: { address: string } }>('/api/agentkit/balance', async (req, reply) => {
-  if (!agentKitInitialized) {
-    return reply.status(503).send({ error: 'AgentKit service is not initialized' });
-  }
-  
-  const { address } = req.query;
-  
-  if (!address) {
-    return reply.status(400).send({ error: 'Address is required' });
-  }
-  
-  try {
-    const balance = await agentKitService.getBalance(address);
-    return { balance };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return reply.status(500).send({ 
-      success: false, 
-      error: `Failed to execute action ${action}`,
-      details: errorMessage 
-    });
-  }
-});
-
 // API Routes for SafeCap
 app.get('/api/campaigns', (req: FastifyRequest, reply: FastifyReply) => {
   console.log('CORS headers:', reply.getHeaders());
@@ -467,6 +371,31 @@ app.post('/api/campaigns', (req: FastifyRequest<{
 }>, reply: FastifyReply) => {
   // ... existing code ...
 })
+
+app.post('/api/campaigns/:id/donate', (req: FastifyRequest<{
+  Params: { id: string },
+  Body: { amount: number }
+}>, reply: FastifyReply) => {
+  // ... existing code ...
+})
+
+// CDP Routes
+app.get('/api/list-accounts', async (req: FastifyRequest<{
+  Querystring: { type?: string }
+}>, reply: FastifyReply) => {
+  // ... existing code ...
+  try {
+    // ... existing code ...
+  } catch (error) {
+    console.error('Error listing accounts:', error);
+    reply.code(500).send({ error: (error as Error).message || 'Failed to list accounts' });
+  }
+});
+
+app.post('/api/send-user-operation', async (req: FastifyRequest<{
+  Body: UserOperationRequest
+}>, reply: FastifyReply) => {
+  // ... existing code ...
   try {
     // ... existing code ...
   } catch (error) {
@@ -1284,7 +1213,7 @@ app.post<{ Body: { agentId: string; message: string } }>('/api/mastra/message', 
   }
 });
 
-// Start the server if not in test environment
+// Start the server if this file is run directly
 const isTest = process.env.NODE_ENV === 'test';
 const isJest = process.env.JEST_WORKER_ID !== undefined;
 
@@ -1307,11 +1236,8 @@ if (!isTest && !isJest) {
   console.log('Skipping server start in test environment');
 }
 
-// Serverless handler function
+// Export the Fastify server for serverless environments
 export default async function handler(req: any, reply: any) {
   await app.ready();
   app.server.emit('request', req, reply);
 }
-
-// Export an empty object to satisfy TypeScript module system
-export {};

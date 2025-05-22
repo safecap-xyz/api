@@ -1,18 +1,13 @@
-/**
- * OpenAI-compatible API routes
- */
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { openaiService } from '../services/openaiService.js';
-import { 
-  OpenAICompletionRequest, 
-  OpenAIChatCompletionRequest 
-} from '../types/openai.js';
+import { FastifyInstance } from 'fastify';
+import { openaiService } from '../../services/openaiService.js';
+import { handleError } from '../utils/error-handler.js';
+import { OpenAICompletionRequest, OpenAIChatCompletionRequest } from '../types/index.js';
 
-/**
- * Register OpenAI-compatible routes
- */
-export function registerOpenAIRoutes(app: FastifyInstance) {
-  // OpenAI completions endpoint
+export default async function(app: FastifyInstance) {
+  // Ensure OpenAI service is initialized
+  openaiService.initialize();
+
+  // OpenAI Completions endpoint
   app.post<{ Body: OpenAICompletionRequest }>('/v1/completions', async (req, reply) => {
     try {
       const { prompt, model, max_tokens } = req.body;
@@ -21,51 +16,26 @@ export function registerOpenAIRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: 'Prompt is required' });
       }
       
-      // Forward to OpenAI service
-      const response = await openaiService.createCompletion(prompt, model, max_tokens);
-      
-      return response;
+      const result = await openaiService.createCompletion(prompt, model, max_tokens);
+      return reply.send(result);
     } catch (error) {
-      console.error('Error in OpenAI completions endpoint:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
-      return reply.status(500).send({ 
-        error: {
-          message: `Failed to create completion: ${errorMessage}`,
-          type: 'api_error'
-        }
-      });
+      handleError(error, reply);
     }
   });
 
-  // OpenAI chat completions endpoint
+  // OpenAI Chat Completions endpoint
   app.post<{ Body: OpenAIChatCompletionRequest }>('/v1/chat/completions', async (req, reply) => {
     try {
       const { messages, model, max_tokens } = req.body;
       
       if (!messages || !Array.isArray(messages) || messages.length === 0) {
-        return reply.status(400).send({ 
-          error: {
-            message: 'Messages array is required and cannot be empty',
-            type: 'invalid_request_error'
-          }
-        });
+        return reply.status(400).send({ error: 'Messages array is required' });
       }
       
-      // Forward to OpenAI service
-      const response = await openaiService.createChatCompletion(messages, model, max_tokens);
-      
-      return response;
+      const result = await openaiService.createChatCompletion(messages, model, max_tokens);
+      return reply.send(result);
     } catch (error) {
-      console.error('Error in OpenAI chat completions endpoint:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
-      return reply.status(500).send({ 
-        error: {
-          message: `Failed to create chat completion: ${errorMessage}`,
-          type: 'api_error'
-        }
-      });
+      handleError(error, reply);
     }
   });
 }

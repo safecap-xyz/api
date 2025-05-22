@@ -1,6 +1,4 @@
-/**
- * OpenAI-compatible API type definitions
- */
+// OpenAI-compatible API interfaces
 
 export interface OpenAICompletionRequest {
   prompt: string;
@@ -16,42 +14,4 @@ export interface OpenAIChatCompletionRequest {
   }>;
   model?: string;
   max_tokens?: number;
-}
-
-export interface OpenAICompletionResponse {
-  id: string;
-  object: string;
-  created: number;
-  model: string;
-  choices: Array<{
-    text: string;
-    index: number;
-    logprobs: null;
-    finish_reason: string;
-  }>;
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-}
-
-export interface OpenAIChatCompletionResponse {
-  id: string;
-  object: string;
-  created: number;
-  model: string;
-  choices: Array<{
-    index: number;
-    message: {
-      role: string;
-      content: string;
-    };
-    finish_reason: string;
-  }>;
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
 }

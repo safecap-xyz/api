@@ -1,20 +1,18 @@
-/**
- * Types index file - exports all type definitions
- */
-
+// Export all types
 export * from './agentkit.js';
-export * from './campaigns.js';
-export * from './api.js';
+export * from './campaign.js';
 export * from './openai.js';
+export * from './requests.js';
+export * from './responses.js';
 
-// Agent orchestration types
-export interface OrchestrateRequest {
-  task: string;
-  apiKey: string;
-}
+// Add Fastify custom module declarations
+import { Campaign } from './campaign.js';
 
-// Mastra API types
-export interface MastraMessageRequest {
-  agentId: string;
-  message: string;
+// Declare custom properties for fastify instance
+declare module 'fastify' {
+  interface FastifyInstance {
+    db: {
+      campaigns: Campaign[];
+    };
+  }
 }

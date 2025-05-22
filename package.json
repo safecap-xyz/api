@@ -9,17 +9,9 @@
     "build": "tsc && node vercel-build.js",
     "dev": "NODE_ENV=development tsx --watch api/index.ts",
     "start": "node .vercel/output/functions/api/index.js",
-    "tsc": "tsc --skipLibCheck",
+    "tsc": "tsc",
     "tsc:watch": "tsc --watch",
-    "vercel-build": "node vercel-build.js"
-  },
-  "vercel": {
-    "builds": [
-      {
-        "src": "vercel-build.js",
-        "use": "@vercel/static-build"
-      }
-    ]
+    "vercel-build": "tsc"
   },
   "dependencies": {
     "@coinbase/agentkit": "^0.7.2",

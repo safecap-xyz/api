@@ -1,23 +1,20 @@
-/**
- * Routes index - exports all route registration functions
- */
 import { FastifyInstance } from 'fastify';
-import { registerAgentKitRoutes } from './agentkit.js';
-import { registerCampaignRoutes } from './campaigns.js';
-import { registerOpenAIRoutes } from './openai.js';
+import agentKitRoutes from './agentkit.js';
+import cdpRoutes from './cdp.js';
+import imageRoutes from './images.js';
+import openaiRoutes from './openai.js';
+import mastraRoutes from './mastra.js';
 
-/**
- * Register all application routes
- * @param app Fastify instance
- */
-export function registerRoutes(app: FastifyInstance) {
-  // Register route handlers by category
-  registerAgentKitRoutes(app);
-  registerCampaignRoutes(app);
-  registerOpenAIRoutes(app);
+// Register all routes
+export async function registerRoutes(app: FastifyInstance): Promise<void> {
+  app.register(agentKitRoutes);
+  app.register(cdpRoutes);
+  app.register(imageRoutes);
+  app.register(openaiRoutes);
+  app.register(mastraRoutes);
   
-  // Define a health check route
-  app.get('/api/health', async () => {
+  // Add a simple health check route
+  app.get('/api/health', async (request, reply) => {
     return { status: 'ok', timestamp: new Date().toISOString() };
   });
 }

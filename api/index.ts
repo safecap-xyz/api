@@ -1,106 +1,117 @@
-/**
- * Main API entry point
- */
-import { config } from 'dotenv';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyReply } from 'fastify';
-import fastifyCors from '@fastify/cors';
+// Load environment variables first
+import './config/env.js';
 
-// Get directory name for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// Import dependencies
+import { createApp } from './app.js';
+import { FastifyInstance } from 'fastify';
 
-// Get the project root directory
-const projectRoot = resolve(__dirname, '..');
+// Create the Fastify application
+const app = createApp();
 
-// Load environment variables from the project root
-const envPath = resolve(projectRoot, '.env');
-config({ path: envPath });
-
-// Import modular components
-import { registerRoutes } from './routes/index.js';
-import { isDevelopment, getEnv } from './utils/env.js';
-import type { Campaign } from './types/campaigns.js';
-
-// Log environment status
-console.log(`Starting in ${isDevelopment() ? 'development' : 'production'} mode`);
-
-// Create Fastify instance with logging configuration
-const app: FastifyInstance = Fastify({
-  logger: {
-    level: isDevelopment() ? 'debug' : 'info',
-    transport: isDevelopment() ? {
-      target: 'pino-pretty',
-      options: {
-        translateTime: 'HH:MM:ss Z',
-        ignore: 'pid,hostname'
-      }
-    } : undefined
-  },
-  ajv: {
-    customOptions: {
-      strict: 'log',
-      coerceTypes: true
-    }
-  }
-});
-
-// Database mock for development
-declare module 'fastify' {
-  interface FastifyInstance {
-    db: {
-      campaigns: Campaign[];
-    }
-  }
-}
-
-// Add in-memory database for development
-app.decorate('db', {
-  campaigns: [
-    {
-      id: '1',
-      title: 'First Campaign',
-      description: 'This is the first campaign',
-      goal: 1000,
-      raised: 500,
-      creator: '0x123...',
-      backers: 5,
-      deadline: '2025-12-31'
-    }
-  ]
-});
-
-// Register CORS plugin
-app.register(fastifyCors, {
-  origin: true, // Allow all origins in development
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-});
-
-// Register all routes
-registerRoutes(app);
-
-// Server startup function
+// Server startup function with comprehensive error handling
 async function startServer(): Promise<string> {
   try {
-    const port = getEnv('PORT', '3000');
-    const host = getEnv('HOST', '0.0.0.0');
+    // Log startup information
+    console.log(`Starting server in ${process.env.NODE_ENV === 'development' ? 'development' : 'production'} mode`);
+    console.log('Environment variables loaded:', Object.keys(process.env).filter(key => 
+      key === 'NODE_ENV' || 
+      key.startsWith('CDP_') || 
+      key.startsWith('ALCHEMY_')
+    ));
     
-    const address = await app.listen({ port: parseInt(port), host });
-    console.log(`Server listening at ${address}`);
+    // Determine host and port
+    // Use a very specific high-numbered port to avoid conflicts
+    let port = 54321; // Explicitly override port to avoid conflicts with other processes
+    const host = process.env.HOST || '0.0.0.0';
+    
+    console.log(`Attempting to start server on port ${port}...`);
+    
+    // Variable to store the server address
+    let address = '';
+    
+    // Try to start the server with the configured port
+    try {
+      // Start the server with correct Fastify v5.3.3 syntax
+      address = await app.listen({
+        port: port,
+        host: host
+      });
+      console.log(`Server is running at ${address}`);
+    } catch (listenError) {
+      if (listenError instanceof Error && listenError.message.includes('EADDRINUSE')) {
+        // Port is in use, try alternative ports
+        console.log(`Port ${port} is already in use, trying alternative ports...`);
+        
+        // Try a wider range of ports, including higher-numbered ports less likely to be in use
+        let success = false;
+        // Try ports in the range 3000-3010, 8080-8082, and 9000-9010
+        const portRanges = [
+          ...Array.from({ length: 10 }, (_, i) => 3000 + i + 1), // 3001-3010
+          ...Array.from({ length: 3 }, (_, i) => 8080 + i),    // 8080-8082
+          ...Array.from({ length: 11 }, (_, i) => 9000 + i)     // 9000-9010
+        ];
+        for (const alternativePort of portRanges) {
+          try {
+            console.log(`Attempting to use port ${alternativePort}...`);
+            address = await app.listen({
+              port: alternativePort,
+              host: host
+            });
+            console.log(`Successfully started server on port ${alternativePort}`);
+            console.log(`Server is running at ${address}`);
+            success = true;
+            break; // Break out of the loop if successful
+          } catch (altError) {
+            console.log(`Failed to use port ${alternativePort}`);
+            // Continue to the next port
+          }
+        }
+        
+        if (!success) {
+          throw new Error('Failed to start server on any available port');
+        }
+      } else {
+        // If the error is not a port conflict, rethrow it
+        throw listenError;
+      }
+    }
+    
+    // Log server information after successful startup
+    console.log(`\n🚀 Server started successfully`);
+    console.log(`   - Environment: ${process.env.NODE_ENV === 'development' ? 'development' : 'production'}`);
+    console.log(`   - Node version: ${process.version}`);
+    console.log(`   - API Documentation: ${address}/documentation\n`);
+    
     return address;
-  } catch (err) {
-    app.log.error(err);
-    process.exit(1);
+  } catch (error) {
+    console.error('\n❌ Fatal error during server startup:');
+    
+    if (error instanceof Error) {
+      console.error(`   - Error: ${error.name}: ${error.message}`);
+      if (error.stack) {
+        console.error('   - Stack trace:');
+        console.error(error.stack.split('\n').slice(0, 3).map(line => `     ${line}`).join('\n') + '\n     ...');
+      }
+    } else {
+      console.error('   - Unknown error:', error);
+    }
+    
+    // Give logs time to flush before exiting
+    setTimeout(() => process.exit(1), 100);
+    return '';
   }
 }
 
-// Start server when running directly (not imported)
-if (import.meta.url === `file://${process.argv[1]}`) {
-  startServer();
+// Export the Fastify server for serverless environments
+export const handler = app;
+
+// Start the server if this file is run directly
+if (process.env.NODE_ENV !== 'test') {
+  startServer().catch(err => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  });
 }
 
-// Export for serverless environments
-export const handler = app;
+// Export for use in tests or serverless environments
+export default app;

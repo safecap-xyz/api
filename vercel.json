@@ -1,5 +1,11 @@
 {
   "version": 2,
+  "builds": [
+    {
+      "src": "api/index.ts",
+      "use": "@vercel/node"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
@@ -13,7 +19,7 @@
     }
   ],
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/(.*)", "destination": "/api" }
-  ]
+  ],
+  "outputDirectory": ".vercel/output"
 }
