@@ -61,13 +61,65 @@ async function build() {
     console.log('Compiling TypeScript...');
     execSync('pnpm tsc', { stdio: 'inherit' });
 
-    // Copy services directory
-    console.log('Copying services...');
+    // Handle services compilation
+    console.log('Processing services...');
     const servicesSrc = path.join(process.cwd(), 'services');
-    const servicesDest = path.join(process.cwd(), '.vercel', 'output', 'functions', 'api', 'services');
+    const apiDest = path.join(process.cwd(), '.vercel', 'output', 'functions', 'api');
     
     if (await exists(servicesSrc)) {
-      await copyDir(servicesSrc, servicesDest);
+      const servicesDest = path.join(apiDest, 'services');
+      await mkdir(servicesDest, { recursive: true });
+      
+      // Create a temporary tsconfig for services
+      const tempTsConfig = {
+        extends: '../tsconfig.json',
+        compilerOptions: {
+          outDir: path.relative(servicesSrc, servicesDest),
+          rootDir: '.',
+          noEmit: false,
+          noEmitOnError: false
+        },
+        include: ['**/*.ts'],
+        exclude: ['node_modules']
+      };
+      
+      await fs.writeFile(
+        path.join(servicesSrc, 'tsconfig.temp.json'),
+        JSON.stringify(tempTsConfig, null, 2)
+      );
+      
+      try {
+        // First, copy all non-TypeScript files
+        const files = await readdir(servicesSrc);
+        for (const file of files) {
+          if (file === 'tsconfig.temp.json') continue;
+          
+          const srcPath = path.join(servicesSrc, file);
+          const destPath = path.join(servicesDest, file);
+          
+          if ((await stat(srcPath)).isDirectory()) {
+            await copyDir(srcPath, destPath);
+          } else if (!file.endsWith('.ts') && !file.endsWith('.json')) {
+            await fs.copyFile(srcPath, destPath);
+          }
+        }
+        
+        // Compile TypeScript files
+        console.log('Compiling TypeScript services...');
+        const tscCmd = `cd ${servicesSrc} && npx tsc -p tsconfig.temp.json --skipLibCheck`;
+        execSync(tscCmd, { stdio: 'inherit' });
+        
+        // Clean up temporary config
+        await fs.unlink(path.join(servicesSrc, 'tsconfig.temp.json'));
+        
+      } catch (error) {
+        console.error('Error processing services:', error);
+        // Clean up temporary config even if there's an error
+        if (await exists(path.join(servicesSrc, 'tsconfig.temp.json'))) {
+          await fs.unlink(path.join(servicesSrc, 'tsconfig.temp.json'));
+        }
+        throw error;
+      }
     }
 
     console.log('Build completed successfully!');

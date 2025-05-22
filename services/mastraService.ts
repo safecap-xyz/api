@@ -178,11 +178,18 @@ export class MastraService {
       console.log('==========================\n');
       
       const startTime = Date.now();
-      const response = await this.axiosInstance.post<MastraResponse>(
+      // Properly type the axios response
+      const response = await this.axiosInstance.post(
         url,
         requestData,
         requestConfig
-      );
+      ) as { 
+        data: MastraResponse;
+        status: number;
+        statusText: string;
+        headers: Record<string, string>;
+        config: any;
+      };
       const endTime = Date.now();
       
       // Log the response

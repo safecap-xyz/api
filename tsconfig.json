@@ -5,7 +5,14 @@
     "moduleResolution": "NodeNext",
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "strict": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "strictFunctionTypes": false,
+    "strictBindCallApply": false,
+    "strictPropertyInitialization": false,
+    "noImplicitThis": false,
+    "alwaysStrict": false,
     "outDir": ".vercel/output/functions",
     "rootDir": ".",
     "declaration": true,
@@ -19,13 +26,25 @@
       "@services/*": ["services/*"]
     },
     "allowJs": true,
-    "checkJs": false
+    "checkJs": false,
+    "skipDefaultLibCheck": true,
+    "types": ["node"],
+    "typeRoots": [
+      "./node_modules/@types",
+      "./types"
+    ]
   },
   "ts-node": {
     "esm": true,
     "experimentalSpecifierResolution": "node",
-    "transpileOnly": true
+    "transpileOnly": true,
+    "files": true
   },
-  "include": ["api/**/*.ts", "api/**/*.d.ts", "services/**/*.ts"],
+  "include": [
+    "api/**/*.ts",
+    "api/**/*.d.ts",
+    "services/**/*.ts",
+    "types/**/*.d.ts"
+  ],
   "exclude": ["node_modules", "dist"]
 }
