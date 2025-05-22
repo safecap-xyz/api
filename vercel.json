@@ -1,14 +1,5 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "vercel-build.js",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": ".vercel/output"
-      }
-    }
-  ],
   "headers": [
     {
       "source": "/(.*)",
