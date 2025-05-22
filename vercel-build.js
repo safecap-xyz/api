@@ -1,11 +1,12 @@
-const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const { promisify } = require('util');
-const copyFile = promisify(fs.copyFile);
-const mkdir = promisify(fs.mkdir);
-const readdir = promisify(fs.readdir);
-const stat = promisify(fs.stat);
+import { execSync } from 'child_process';
+import { promises as fs } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const { copyFile, mkdir, readdir, stat } = fs;
 
 async function copyDir(src, dest) {
   await mkdir(dest, { recursive: true });
@@ -23,36 +24,53 @@ async function copyDir(src, dest) {
   }
 }
 
+// Check if directory exists
+async function exists(filePath) {
+  try {
+    await stat(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function build() {
   try {
-    // Create public directory with a basic index.html
-    const publicDir = path.join(__dirname, 'public');
-    if (!fs.existsSync(publicDir)) {
+    const publicDir = path.join(process.cwd(), 'public');
+    const outputDir = path.join(process.cwd(), '.vercel', 'output', 'static');
+    
+    // Ensure output directory exists
+    await mkdir(outputDir, { recursive: true });
+    
+    // Create public directory if it doesn't exist
+    if (!(await exists(publicDir))) {
       await mkdir(publicDir, { recursive: true });
     }
     
-    fs.writeFileSync(
+    // Create a basic index.html
+    await fs.writeFile(
       path.join(publicDir, 'index.html'),
       '<!DOCTYPE html><html><head><title>API Server</title></head><body><h1>API Server</h1><p>This is an API server.</p></body></html>'
     );
 
-    // Ensure output directory exists
-    const outputDir = path.join(__dirname, '.vercel', 'output', 'functions', 'api');
-    await mkdir(outputDir, { recursive: true });
-
+    // Copy public files to output directory
+    if (await exists(publicDir)) {
+      await copyDir(publicDir, outputDir);
+    }
+    
     console.log('Compiling TypeScript...');
     execSync('pnpm tsc', { stdio: 'inherit' });
 
     // Copy services directory
     console.log('Copying services...');
-    const servicesSrc = path.join(__dirname, 'services');
-    const servicesDest = path.join(outputDir, 'services');
+    const servicesSrc = path.join(process.cwd(), 'services');
+    const servicesDest = path.join(process.cwd(), '.vercel', 'output', 'functions', 'api', 'services');
     
-    if (fs.existsSync(servicesSrc)) {
+    if (await exists(servicesSrc)) {
       await copyDir(servicesSrc, servicesDest);
     }
 
-    console.log('Build completed successfully');
+    console.log('Build completed successfully!');
   } catch (error) {
     console.error('Build failed:', error);
     process.exit(1);

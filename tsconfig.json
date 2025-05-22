@@ -6,7 +6,7 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "strict": true,
-    "outDir": ".vercel/output/functions/api",
+    "outDir": ".vercel/output/functions",
     "rootDir": ".",
     "declaration": true,
     "skipLibCheck": true,
