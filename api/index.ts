@@ -45,9 +45,6 @@ console.log('Environment variables at this point:', {
 });
 
 // Import Fastify and other dependencies
-// Get directory name for ES modules first
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 // Debug current working directory
 console.log('Current working directory:', process.cwd());
@@ -103,23 +100,7 @@ console.log('Environment variables before service imports:', {
   OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '***' + process.env.OPENAI_API_KEY.slice(-4) : 'undefined'
 });
 
-// Import services after environment variables are loaded
-console.log('Importing services...');
-import { openaiService } from '../services/openaiService.js';
-import { agentKitService } from '../services/agentKitService.js';
-import { mastraService } from '../services/mastraService.js';
-
-// Initialize services
-openaiService.initialize();
-
-console.log('All services imported');
-
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'Reason:', reason);
-  // Optionally exit with a non-zero code
-  // process.exit(1);
-});
+// Log environment variables before service imports
 console.log('Before importing services');
 console.log('Environment variables before service imports:', {
   OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '***' + process.env.OPENAI_API_KEY.slice(-4) : 'undefined'
@@ -133,7 +114,6 @@ import { mastraService } from '../services/mastraService.js';
 
 // Initialize services
 openaiService.initialize();
-
 console.log('All services imported');
 
 // Handle unhandled promise rejections
@@ -1042,17 +1022,10 @@ const startServer = async (): Promise<string> => {
     const port = Number(process.env.PORT) || 3000;
     const host = process.env.HOST || '0.0.0.0';
     
-    const port = Number(process.env.PORT) || 3000;
-    const host = process.env.HOST || '0.0.0.0';
-    
     const address = await app.listen({
       port,
       host,
-      port,
-      host,
     });
-    
-    console.log(`Server is running at ${address}`);
     
     console.log(`Server is running at ${address}`);
     
