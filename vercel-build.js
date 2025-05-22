@@ -39,10 +39,6 @@ async function build() {
   try {
     console.log('Starting build process...');
     
-    // First, compile TypeScript files
-    console.log('Compiling TypeScript...');
-    execSync('pnpm tsc', { stdio: 'inherit' });
-    
     // Ensure .vercel/output directory exists
     const vercelOutputDir = path.join(process.cwd(), '.vercel', 'output', 'functions');
     const apiOutputDir = path.join(vercelOutputDir, 'api');
@@ -50,13 +46,17 @@ async function build() {
     // Create necessary directories
     await mkdir(apiOutputDir, { recursive: true });
     
-    // Copy compiled JavaScript files
+    // First, compile TypeScript files
+    console.log('Compiling TypeScript...');
+    execSync('pnpm tsc', { stdio: 'inherit' });
+    
+    // Copy compiled JavaScript files from the output directory
     const compiledDir = path.join(process.cwd(), '.vercel', 'output', 'functions');
     
     // Copy api directory
-    const apiSrc = path.join(process.cwd(), 'api');
+    const apiSrc = path.join(process.cwd(), '.vercel', 'output', 'functions', 'api');
     if (await exists(apiSrc)) {
-      console.log(`Copying API files from ${apiSrc} to ${apiOutputDir}`);
+      console.log(`Copying compiled API files from ${apiSrc} to ${apiOutputDir}`);
       await copyDir(apiSrc, apiOutputDir, {
         filter: (filename) => {
           return filename.endsWith('.js') || 
@@ -66,7 +66,7 @@ async function build() {
       });
     }
     
-    // Copy services directory
+    // Copy services directory from source to include .d.ts files
     const servicesSrc = path.join(process.cwd(), 'services');
     const servicesDest = path.join(apiOutputDir, 'services');
     
@@ -74,9 +74,7 @@ async function build() {
       console.log(`Copying services from ${servicesSrc} to ${servicesDest}`);
       await copyDir(servicesSrc, servicesDest, {
         filter: (filename) => {
-          return filename.endsWith('.js') || 
-                 filename.endsWith('.d.ts') ||
-                 filename.endsWith('.json');
+          return filename.endsWith('.d.ts') || filename.endsWith('.json');
         }
       });
     }

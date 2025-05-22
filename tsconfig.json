@@ -29,7 +29,7 @@
     "checkJs": false,
     "skipDefaultLibCheck": true,
     "types": ["node"],
-    "rootDirs": ["./"],
+    "rootDirs": ["."],
     "typeRoots": [
       "./node_modules/@types",
       "./types"
@@ -38,11 +38,14 @@
   },
   "ts-node": {
     "esm": true,
-    "experimentalSpecifierResolution": "node"
+    "experimentalSpecifierResolution": "node",
+    "transpileOnly": true,
+    "files": true
   },
   "include": [
     "api/**/*.ts",
-    "services/**/*.ts"
+    "services/**/*.ts",
+    "types/**/*.d.ts"
   ],
   "exclude": [
     "node_modules",
