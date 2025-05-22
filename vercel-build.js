@@ -6,9 +6,9 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const { copyFile, mkdir, readdir, stat } = fs;
+const { copyFile, mkdir, readdir, stat, readFile, writeFile } = fs;
 
-async function copyDir(src, dest) {
+async function copyDir(src, dest, { filter = () => true } = {}) {
   await mkdir(dest, { recursive: true });
   const entries = await readdir(src, { withFileTypes: true });
 
@@ -17,8 +17,9 @@ async function copyDir(src, dest) {
     const destPath = path.join(dest, entry.name);
 
     if (entry.isDirectory()) {
-      await copyDir(srcPath, destPath);
-    } else if (entry.name.endsWith('.js') || entry.name.endsWith('.d.ts') || entry.name.endsWith('.json')) {
+      await copyDir(srcPath, destPath, { filter });
+    } else if (filter(entry.name)) {
+      await mkdir(path.dirname(destPath), { recursive: true });
       await copyFile(srcPath, destPath);
     }
   }
@@ -36,91 +37,67 @@ async function exists(filePath) {
 
 async function build() {
   try {
-    const publicDir = path.join(process.cwd(), 'public');
-    const outputDir = path.join(process.cwd(), '.vercel', 'output', 'static');
+    console.log('Starting build process...');
     
-    // Ensure output directory exists
-    await mkdir(outputDir, { recursive: true });
+    // Ensure .vercel/output directory exists
+    const vercelOutputDir = path.join(process.cwd(), '.vercel', 'output');
+    await mkdir(vercelOutputDir, { recursive: true });
     
-    // Create public directory if it doesn't exist
-    if (!(await exists(publicDir))) {
-      await mkdir(publicDir, { recursive: true });
-    }
-    
-    // Create a basic index.html
-    await fs.writeFile(
-      path.join(publicDir, 'index.html'),
-      '<!DOCTYPE html><html><head><title>API Server</title></head><body><h1>API Server</h1><p>This is an API server.</p></body></html>'
-    );
-
-    // Copy public files to output directory
-    if (await exists(publicDir)) {
-      await copyDir(publicDir, outputDir);
-    }
-    
-    console.log('Compiling TypeScript...');
-    execSync('pnpm tsc', { stdio: 'inherit' });
-
-    // Handle services compilation
-    console.log('Processing services...');
+    // Copy services directory to output
     const servicesSrc = path.join(process.cwd(), 'services');
-    const apiDest = path.join(process.cwd(), '.vercel', 'output', 'functions', 'api');
+    const servicesDest = path.join(vercelOutputDir, 'functions/api/services');
     
     if (await exists(servicesSrc)) {
-      const servicesDest = path.join(apiDest, 'services');
-      await mkdir(servicesDest, { recursive: true });
-      
-      // Create a temporary tsconfig for services
-      const tempTsConfig = {
-        extends: '../tsconfig.json',
-        compilerOptions: {
-          outDir: path.relative(servicesSrc, servicesDest),
-          rootDir: '.',
-          noEmit: false,
-          noEmitOnError: false
-        },
-        include: ['**/*.ts'],
-        exclude: ['node_modules']
-      };
-      
-      await fs.writeFile(
-        path.join(servicesSrc, 'tsconfig.temp.json'),
-        JSON.stringify(tempTsConfig, null, 2)
-      );
-      
-      try {
-        // First, copy all non-TypeScript files
-        const files = await readdir(servicesSrc);
-        for (const file of files) {
-          if (file === 'tsconfig.temp.json') continue;
-          
-          const srcPath = path.join(servicesSrc, file);
-          const destPath = path.join(servicesDest, file);
-          
-          if ((await stat(srcPath)).isDirectory()) {
-            await copyDir(srcPath, destPath);
-          } else if (!file.endsWith('.ts') && !file.endsWith('.json')) {
-            await fs.copyFile(srcPath, destPath);
-          }
+      console.log(`Copying services from ${servicesSrc} to ${servicesDest}`);
+      await copyDir(servicesSrc, servicesDest, {
+        filter: (filename) => {
+          // Only copy JavaScript, TypeScript, and JSON files
+          return filename.endsWith('.js') || 
+                 filename.endsWith('.ts') || 
+                 filename.endsWith('.json') ||
+                 filename.endsWith('.d.ts');
         }
-        
-        // Compile TypeScript files
-        console.log('Compiling TypeScript services...');
-        const tscCmd = `cd ${servicesSrc} && npx tsc -p tsconfig.temp.json --skipLibCheck`;
-        execSync(tscCmd, { stdio: 'inherit' });
-        
-        // Clean up temporary config
-        await fs.unlink(path.join(servicesSrc, 'tsconfig.temp.json'));
-        
-      } catch (error) {
-        console.error('Error processing services:', error);
-        // Clean up temporary config even if there's an error
-        if (await exists(path.join(servicesSrc, 'tsconfig.temp.json'))) {
-          await fs.unlink(path.join(servicesSrc, 'tsconfig.temp.json'));
-        }
-        throw error;
-      }
+      });
+    } else {
+      console.warn(`Services directory not found at ${servicesSrc}`);
     }
+    
+    // Copy package.json to the functions directory
+    const packageJsonPath = path.join(process.cwd(), 'package.json');
+    const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
+    
+    // Update the package.json to use the correct main file
+    packageJson.main = 'api/index.js';
+    
+    // Write the updated package.json to the functions directory
+    const outputPackageJsonPath = path.join(vercelOutputDir, 'functions/package.json');
+    await mkdir(path.dirname(outputPackageJsonPath), { recursive: true });
+    await writeFile(outputPackageJsonPath, JSON.stringify(packageJson, null, 2), 'utf8');
+    
+    // Create a basic vercel.json configuration
+    const vercelConfig = {
+      version: 2,
+      builds: [
+        {
+          src: 'api/index.js',
+          use: '@vercel/node'
+        }
+      ],
+      routes: [
+        { src: '/api/(.*)', dest: '/api' },
+        { src: '/(.*)', dest: '/api' }
+      ]
+    };
+    
+    await writeFile(
+      path.join(vercelOutputDir, 'config.json'),
+      JSON.stringify(vercelConfig, null, 2),
+      'utf8'
+    );
+    
+    // Compile TypeScript files
+    console.log('Compiling TypeScript...');
+    execSync('pnpm tsc', { stdio: 'inherit' });
 
     console.log('Build completed successfully!');
   } catch (error) {

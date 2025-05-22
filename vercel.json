@@ -2,12 +2,13 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/index.ts",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": ["services/**"]
-      }
+      "src": "package.json",
+      "use": "@vercel/node"
     }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api" },
+    { "src": "/(.*)", "dest": "/api" }
   ],
   "headers": [
     {
@@ -23,6 +24,5 @@
   ],
   "rewrites": [
     { "source": "/(.*)", "destination": "/api" }
-  ],
-  "outputDirectory": ".vercel/output"
+  ]
 }

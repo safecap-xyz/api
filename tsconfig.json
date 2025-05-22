@@ -29,10 +29,12 @@
     "checkJs": false,
     "skipDefaultLibCheck": true,
     "types": ["node"],
+    "rootDirs": ["./"],
     "typeRoots": [
       "./node_modules/@types",
       "./types"
-    ]
+    ],
+    "composite": true
   },
   "ts-node": {
     "esm": true,
