@@ -45,60 +45,12 @@ console.log('Environment variables at this point:', {
 });
 
 // Import Fastify and other dependencies
-
-// Debug current working directory
-console.log('Current working directory:', process.cwd());
-console.log('__dirname:', __dirname);
-
-// Get the project root directory (one level up from the api directory)
-const projectRoot = resolve(__dirname, '..');
-console.log('Project root:', projectRoot);
-
-// Explicitly load .env file from the project root
-const envPath = resolve(projectRoot, '.env');
-console.log('Attempting to load .env from:', envPath);
-
-// Load the environment variables
-const result = config({ path: envPath });
-
-if (result.error) {
-  console.error('Failed to load .env file:', result.error);
-} else {
-  console.log('Successfully loaded .env file');
-}
-
-// Debug log environment variables
-console.log('Environment variables:', {
-  NODE_ENV: process.env.NODE_ENV,
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '***' + process.env.OPENAI_API_KEY.slice(-4) : 'undefined',
-  CDP_API_KEY_ID: process.env.CDP_API_KEY_ID ? '***' + process.env.CDP_API_KEY_ID.slice(-4) : 'undefined',
-  CDP_API_KEY_SECRET: process.env.CDP_API_KEY_SECRET ? '***' + process.env.CDP_API_KEY_SECRET.slice(-4) : 'undefined',
-  CDP_WALLET_SECRET: process.env.CDP_WALLET_SECRET ? '***' + process.env.CDP_WALLET_SECRET.slice(-4) : 'undefined'
-});
-
-// Now import other dependencies after environment variables are loaded
-console.log('Before importing Fastify and other dependencies');
-console.log('Environment variables at this point:', {
-  NODE_ENV: process.env.NODE_ENV,
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '***' + process.env.OPENAI_API_KEY.slice(-4) : 'undefined'
-});
-
-// Import Fastify and other dependencies
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import fastifyCors, { type FastifyCorsOptions } from '@fastify/cors';
 import { CdpClient } from '@coinbase/cdp-sdk';
-// import { AgentKit } from '@coinbase/agentkit';
-// import { CdpV2EvmWalletProvider } from '@coinbase/agentkit/wallets/cdp-v2-evm-wallet-provider';
-// import { AgentKit } from '@coinbase/agentkit';
-// import { CdpV2EvmWalletProvider } from '@coinbase/agentkit/wallets/cdp-v2-evm-wallet-provider';
 import { Client } from "@gradio/client";
 import { ethers } from 'ethers';
 import { readFile } from 'fs/promises';
-
-console.log('Before importing services');
-console.log('Environment variables before service imports:', {
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '***' + process.env.OPENAI_API_KEY.slice(-4) : 'undefined'
-});
 
 // Log environment variables before service imports
 console.log('Before importing services');
