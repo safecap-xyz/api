@@ -39,30 +39,49 @@ async function build() {
   try {
     console.log('Starting build process...');
     
-    // Ensure .vercel/output directory exists
-    const vercelOutputDir = path.join(process.cwd(), '.vercel', 'output');
-    await mkdir(vercelOutputDir, { recursive: true });
+    // First, compile TypeScript files
+    console.log('Compiling TypeScript...');
+    execSync('pnpm tsc', { stdio: 'inherit' });
     
-    // Copy services directory to output
+    // Ensure .vercel/output directory exists
+    const vercelOutputDir = path.join(process.cwd(), '.vercel', 'output', 'functions');
+    const apiOutputDir = path.join(vercelOutputDir, 'api');
+    
+    // Create necessary directories
+    await mkdir(apiOutputDir, { recursive: true });
+    
+    // Copy compiled JavaScript files
+    const compiledDir = path.join(process.cwd(), '.vercel', 'output', 'functions');
+    
+    // Copy api directory
+    const apiSrc = path.join(process.cwd(), 'api');
+    if (await exists(apiSrc)) {
+      console.log(`Copying API files from ${apiSrc} to ${apiOutputDir}`);
+      await copyDir(apiSrc, apiOutputDir, {
+        filter: (filename) => {
+          return filename.endsWith('.js') || 
+                 filename.endsWith('.d.ts') ||
+                 filename.endsWith('.json');
+        }
+      });
+    }
+    
+    // Copy services directory
     const servicesSrc = path.join(process.cwd(), 'services');
-    const servicesDest = path.join(vercelOutputDir, 'functions/api/services');
+    const servicesDest = path.join(apiOutputDir, 'services');
     
     if (await exists(servicesSrc)) {
       console.log(`Copying services from ${servicesSrc} to ${servicesDest}`);
       await copyDir(servicesSrc, servicesDest, {
         filter: (filename) => {
-          // Only copy JavaScript, TypeScript, and JSON files
           return filename.endsWith('.js') || 
-                 filename.endsWith('.ts') || 
-                 filename.endsWith('.json') ||
-                 filename.endsWith('.d.ts');
+                 filename.endsWith('.d.ts') ||
+                 filename.endsWith('.json');
         }
       });
-    } else {
-      console.warn(`Services directory not found at ${servicesSrc}`);
     }
     
-    // Copy package.json to the functions directory
+    // Copy package.json
     const packageJsonPath = path.join(process.cwd(), 'package.json');
     const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
     
@@ -70,13 +89,15 @@ async function build() {
     packageJson.main = 'api/index.js';
     
     // Write the updated package.json to the functions directory
-    const outputPackageJsonPath = path.join(vercelOutputDir, 'functions/package.json');
-    await mkdir(path.dirname(outputPackageJsonPath), { recursive: true });
-    await writeFile(outputPackageJsonPath, JSON.stringify(packageJson, null, 2), 'utf8');
+    await writeFile(
+      path.join(vercelOutputDir, 'package.json'),
+      JSON.stringify(packageJson, null, 2),
+      'utf8'
+    );
     
-    // Create a basic vercel.json configuration
+    // Create a basic config.json for Vercel
     const vercelConfig = {
-      version: 2,
+      version: 3,
       builds: [
         {
           src: 'api/index.js',
@@ -95,10 +116,6 @@ async function build() {
       'utf8'
     );
     
-    // Compile TypeScript files
-    console.log('Compiling TypeScript...');
-    execSync('pnpm tsc', { stdio: 'inherit' });
-
     console.log('Build completed successfully!');
   } catch (error) {
     console.error('Build failed:', error);
