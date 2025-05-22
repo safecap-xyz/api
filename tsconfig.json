@@ -34,7 +34,8 @@
       "./node_modules/@types",
       "./types"
     ],
-    "composite": true
+    "composite": true,
+    "ignoreDeprecations": "5.0"
   },
   "ts-node": {
     "esm": true,

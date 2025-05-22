@@ -59,12 +59,22 @@ async function build() {
     // This ensures that the imports with .js extensions will work correctly
     const apiSrcDir = path.join(process.cwd(), 'api');
     const servicesSrcDir = path.join(process.cwd(), 'services');
+    const typesSrcDir = path.join(process.cwd(), 'types');
     
     console.log(`Copying API source files from ${apiSrcDir} to ${apiOutputDir}`);
     await copyDir(apiSrcDir, apiOutputDir);
     
     console.log(`Copying services source files from ${servicesSrcDir} to ${servicesOutputDir}`);
     await copyDir(servicesSrcDir, servicesOutputDir);
+    
+    // Copy the types directory with declaration files
+    const typesOutputDir = path.join(vercelFunctionsDir, 'types');
+    await mkdir(typesOutputDir, { recursive: true });
+    
+    if (await exists(typesSrcDir)) {
+      console.log(`Copying type declarations from ${typesSrcDir} to ${typesOutputDir}`);
+      await copyDir(typesSrcDir, typesOutputDir);
+    }
     
     // Now compile TypeScript files in place
     console.log('Compiling TypeScript...');
