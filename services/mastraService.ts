@@ -16,6 +16,26 @@ interface ToolCall {
   };
 }
 
+// Define proper message types for Mastra API
+interface MastraUserMessage {
+  role: 'user';
+  content: string;
+}
+
+interface MastraAssistantMessage {
+  role: 'assistant';
+  content: string;
+  tool_calls?: ToolCall[];
+}
+
+interface MastraToolMessage {
+  role: 'tool';
+  tool_call_id: string;
+  content: string;
+}
+
+type MastraMessage = MastraUserMessage | MastraAssistantMessage | MastraToolMessage;
+
 interface AgentMessage {
   role: 'user' | 'assistant' | 'system' | 'tool';
   parts: MessagePart[];
@@ -26,14 +46,6 @@ interface AgentMessage {
 }
 
 // Define the expected response type from Mastra API
-interface ToolCall {
-  id: string;
-  type: string;
-  function: {
-    name: string;
-    arguments: string;
-  };
-}
 
 interface MastraMessage {
   role: string;
@@ -135,6 +147,22 @@ export class MastraService {
       }
     );
 
+    // Add response interceptor to debug errors
+    this.axiosInstance.interceptors.response.use(
+      (response) => {
+        return response;
+      },
+      (error) => {
+        console.log('\n❌ === AXIOS RESPONSE ERROR ===');
+        console.log('URL:', error.config?.url);
+        console.log('Status:', error.response?.status);
+        console.log('Status Text:', error.response?.statusText);
+        console.log('Error Data:', JSON.stringify(error.response?.data, null, 2));
+        console.log('===============================\n');
+        return Promise.reject(error);
+      }
+    );
+
     console.log('MastraService initialized with baseUrl:', this.baseUrl);
   }
 
@@ -145,8 +173,8 @@ export class MastraService {
    * @returns The agent's response
    */
   // Helper function to handle tool calls
-  private async handleToolCalls(toolCalls: any[]): Promise<any[]> {
-    const toolResults = [];
+  private async handleToolCalls(toolCalls: any[]): Promise<MastraToolMessage[]> {
+    const toolResults: MastraToolMessage[] = [];
 
     console.log('\n🔧 === TOOL CALLS HANDLER INVOKED ===');
     console.log('Number of tool calls to process:', toolCalls.length);
@@ -180,7 +208,7 @@ export class MastraService {
 
         console.log('🌤️ Is Weather Tool:', isWeatherTool);
 
-        let toolResult;
+        let toolResult: MastraToolMessage;
 
         if (isWeatherTool) {
           console.log('🌤️ === WEATHER TOOL DETECTED ===');
@@ -199,10 +227,10 @@ export class MastraService {
             timestamp: new Date().toISOString()
           };
 
+          // Create properly typed tool result
           toolResult = {
-            tool_call_id: toolCall.id,
             role: 'tool',
-            name: toolCall.function.name,
+            tool_call_id: toolCall.id,
             content: JSON.stringify({
               status: 'success',
               data: weatherData,
@@ -212,14 +240,15 @@ export class MastraService {
 
           console.log('🌤️ Weather Tool Result:', JSON.stringify(toolResult, null, 2));
           console.log('===============================\n');
+
+          toolResults.push(toolResult);
         } else {
           console.log('🔧 Generic tool call - using mock response');
           // Here you would normally execute the tool and get the result
           // For now, we'll just return a mock response
           toolResult = {
-            tool_call_id: toolCall.id,
             role: 'tool',
-            name: toolCall.function.name,
+            tool_call_id: toolCall.id,
             content: JSON.stringify({
               status: 'success',
               data: `Mock response for ${toolCall.function.name} with args: ${toolCall.function.arguments}`,
@@ -245,9 +274,8 @@ export class MastraService {
         console.error('Error handling tool call:', error);
 
         toolResults.push({
-          tool_call_id: toolCall.id,
           role: 'tool',
-          name: toolCall.function.name,
+          tool_call_id: toolCall.id,
           content: JSON.stringify({
             status: 'error',
             error: 'Failed to execute tool',
@@ -280,7 +308,7 @@ export class MastraService {
    */
   async sendMessageWithConversation(
     agentId: string,
-    messages: any[],
+    messages: MastraMessage[],
     taskId: string = crypto.randomUUID()
   ): Promise<ServiceResponse<AgentMessage>> {
     try {
