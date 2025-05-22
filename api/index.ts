@@ -109,4 +109,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 }
 
 // Export for serverless environments
-export const handler = app;
+// This format works with both AWS Lambda and Vercel
+export default async function handler(req: any, res: any) {
+  await app.ready();
+  app.server.emit('request', req, res);
+}
