@@ -92,7 +92,7 @@ async function startServer(): Promise<string> {
     console.log(`Server listening at ${address}`);
     return address;
   } catch (err) {
-    app.log.error(err);
+    console.error('Server failed to start:', err);
     process.exit(1);
   }
 }
