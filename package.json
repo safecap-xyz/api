@@ -11,7 +11,7 @@
     "start": "node .vercel/output/functions/api/index.js",
     "tsc": "tsc",
     "tsc:watch": "tsc --watch",
-    "vercel-build": "tsc"
+    "vercel-build": "tsc --esModuleInterop --module NodeNext --moduleResolution NodeNext"
   },
   "dependencies": {
     "@coinbase/agentkit": "^0.7.2",
