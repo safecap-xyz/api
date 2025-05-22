@@ -28,16 +28,19 @@ console.log(`Starting in ${isDevelopment() ? 'development' : 'production'} mode`
 
 // Create Fastify instance with logging configuration
 const app: FastifyInstance = Fastify({
-  logger: {
-    level: isDevelopment() ? 'debug' : 'info',
-    transport: isDevelopment() ? {
-      target: 'pino-pretty',
-      options: {
-        translateTime: 'HH:MM:ss Z',
-        ignore: 'pid,hostname'
-      }
-    } : undefined
-  },
+  logger: isDevelopment() 
+    ? {
+        level: 'debug',
+        transport: {
+          target: 'pino-pretty',
+          options: {
+            translateTime: 'HH:MM:ss Z',
+            ignore: 'pid,hostname'
+          }
+        }
+      } 
+    : { level: 'info' }, // Simple logger config for production
+  
   ajv: {
     customOptions: {
       strict: 'log',
