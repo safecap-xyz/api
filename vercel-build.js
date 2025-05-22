@@ -74,25 +74,23 @@ async function build() {
     const servicesOutputDir = path.join(vercelFunctionsDir, 'services');
     await mkdir(servicesOutputDir, { recursive: true });
     
-    // First copy the source TypeScript files to the output directory
+    // Copy the source TypeScript files to the output directory
     // This ensures that the imports with .js extensions will work correctly
     const apiSrcDir = path.join(process.cwd(), 'api');
-    const servicesSrcDir = path.join(process.cwd(), 'services');
-    const typesSrcDir = path.join(process.cwd(), 'types');
     
     console.log(`Copying API source files from ${apiSrcDir} to ${apiOutputDir}`);
     await copyDir(apiSrcDir, apiOutputDir);
     
-    console.log(`Copying services source files from ${servicesSrcDir} to ${servicesOutputDir}`);
-    await copyDir(servicesSrcDir, servicesOutputDir);
+    // Our new structure has everything under the /api directory
+    // No need for separate services and types directories
+    console.log('Using new modular structure with everything under /api');
     
-    // Copy the types directory with declaration files
-    const typesOutputDir = path.join(vercelFunctionsDir, 'types');
-    await mkdir(typesOutputDir, { recursive: true });
-    
-    if (await exists(typesSrcDir)) {
-      console.log(`Copying type declarations from ${typesSrcDir} to ${typesOutputDir}`);
-      await copyDir(typesSrcDir, typesOutputDir);
+    // Ensure all subdirectories exist in the output
+    const apiSubdirs = ['routes', 'services', 'types', 'utils', 'config'];
+    for (const subdir of apiSubdirs) {
+      const outputSubdir = path.join(apiOutputDir, subdir);
+      console.log(`Ensuring ${subdir} directory exists at ${outputSubdir}`);
+      await mkdir(outputSubdir, { recursive: true });
     }
     
     // Use a more direct compilation approach instead of relying on tsc
@@ -103,13 +101,12 @@ async function build() {
       // we'll use a more direct approach to transform TypeScript files
       console.log('Transforming TypeScript files to JavaScript...');
       
-      // For each .ts file in api and services, create a .js version
+      // For each .ts file in our api directory (including subdirectories), create a .js version
       // This is a simplified approach that bypasses TypeScript's module resolution
       const apiFiles = await findTsFiles(apiOutputDir);
-      const serviceFiles = await findTsFiles(servicesOutputDir);
       
       // Process each file
-      for (const file of [...apiFiles, ...serviceFiles]) {
+      for (const file of apiFiles) {
         const jsFile = file.replace(/\.ts$/, '.js');
         
         // Read the TS file

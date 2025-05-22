@@ -85,7 +85,7 @@ registerRoutes(app);
 // Server startup function
 async function startServer(): Promise<string> {
   try {
-    const port = getEnv('PORT', '3000');
+    const port = getEnv('PORT', '4001');
     const host = getEnv('HOST', '0.0.0.0');
     
     const address = await app.listen({ port: parseInt(port), host });

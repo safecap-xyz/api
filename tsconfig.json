@@ -23,7 +23,11 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["api/*"],
-      "@services/*": ["services/*"]
+      "@routes/*": ["api/routes/*"],
+      "@services/*": ["api/services/*"],
+      "@types/*": ["api/types/*"],
+      "@utils/*": ["api/utils/*"],
+      "@config/*": ["api/config/*"]
     },
     "allowJs": true,
     "checkJs": false,
@@ -45,8 +49,7 @@
   },
   "include": [
     "api/**/*.ts",
-    "services/**/*.ts",
-    "types/**/*.d.ts"
+    "api/**/*.d.ts"
   ],
   "exclude": [
     "node_modules",
