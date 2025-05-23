@@ -8,12 +8,13 @@
   "scripts": {
     "preinstall": "echo 'Setting up environment...' && export ONNX_DISABLE_BACKEND=1 && export SKIP_ONNXRUNTIME_POSTINSTALL=1",
     "debug": "vercel dev",
-    "build": "tsc && node vercel-build.js",
+    "build": "tsc && node vercel-build.js && node scripts/verify-build.js",
     "dev": "NODE_ENV=development tsx --watch api/index.ts",
     "start": "node .vercel/output/functions/api/index.js",
     "tsc": "tsc",
     "tsc:watch": "tsc --watch",
-    "vercel-build": "tsc && node vercel-build.js"
+    "vercel-build": "tsc && node vercel-build.js",
+    "verify-build": "node scripts/verify-build.js"
   },
   "dependencies": {
     "@coinbase/agentkit": "^0.7.2",

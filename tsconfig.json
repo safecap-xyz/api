@@ -8,7 +8,8 @@
     "strict": true,
     "outDir": ".vercel/output/functions/api",
     "rootDir": ".",
-    "declaration": true,
+    "declaration": false,
+    "declarationMap": false,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "allowSyntheticDefaultImports": true,
@@ -22,13 +23,23 @@
     "checkJs": false,
     "verbatimModuleSyntax": false,
     "noEmit": false,
-    "emitDeclarationOnly": false
+    "emitDeclarationOnly": false,
+    "sourceMap": true
   },
   "ts-node": {
     "esm": true,
     "experimentalSpecifierResolution": "node",
     "transpileOnly": true
   },
-  "include": ["api/**/*.ts", "api/**/*.d.ts", "services/**/*.ts", "services/**/*.d.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "api/**/*.ts",
+    "services/**/*.ts",
+    "types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    ".vercel",
+    ".git"
+  ]
 }
