@@ -8,12 +8,13 @@ const copyFile = promisify(fs.copyFile);
 const mkdir = promisify(fs.mkdir);
 const readdir = promisify(fs.readdir);
 const stat = promisify(fs.stat);
+const writeFile = promisify(fs.writeFile);
 
 // Get __dirname equivalent in ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-async function copyDir(src, dest) {
+async function copyFilesWithExtensions(src, dest, extensions) {
   await mkdir(dest, { recursive: true });
   const entries = await readdir(src, { withFileTypes: true });
 
@@ -22,40 +23,29 @@ async function copyDir(src, dest) {
     const destPath = path.join(dest, entry.name);
 
     if (entry.isDirectory()) {
-      await copyDir(srcPath, destPath);
-    } else {
-      // Copy all files - both source .ts and compiled .js files are important
-      // for NodeNext module resolution to work properly
+      await copyFilesWithExtensions(srcPath, destPath, extensions);
+    } else if (extensions.some(ext => entry.name.endsWith(ext))) {
       await copyFile(srcPath, destPath);
+      console.log(`Copied: ${srcPath} -> ${destPath}`);
     }
   }
 }
 
-async function copySourceWithExtension(src, dest) {
-  // This ensures we copy both the TypeScript source files (for proper imports) 
-  // and the compiled JavaScript files
-  await mkdir(dest, { recursive: true });
+async function copyPackageFiles() {
+  const outputDir = path.join(__dirname, '.vercel', 'output', 'functions', 'api');
   
-  try {
-    const entries = await readdir(src, { withFileTypes: true });
-    
-    for (const entry of entries) {
-      const srcPath = path.join(src, entry.name);
-      const destPath = path.join(dest, entry.name);
-      
-      if (entry.isDirectory()) {
-        await copySourceWithExtension(srcPath, destPath);
-      } else {
-        // Copy both .ts and .js files to ensure proper module resolution
-        if (entry.name.endsWith('.ts') || entry.name.endsWith('.js') || entry.name.endsWith('.d.ts')) {
-          await copyFile(srcPath, destPath);
-          console.log(`Copied: ${srcPath} -> ${destPath}`);
-        }
-      }
-    }
-  } catch (error) {
-    console.error(`Error copying directory ${src}:`, error);
-  }
+  // Copy package.json with updated type
+  const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+  packageJson.type = 'module'; // Ensure we're using ESM
+  await writeFile(
+    path.join(outputDir, 'package.json'),
+    JSON.stringify(packageJson, null, 2)
+  );
+  
+  // Copy tsconfig.json
+  await copyFile('tsconfig.json', path.join(outputDir, 'tsconfig.json'));
+  
+  console.log('Copied configuration files');
 }
 
 async function build() {
@@ -66,7 +56,7 @@ async function build() {
       await mkdir(publicDir, { recursive: true });
     }
     
-    fs.writeFileSync(
+    await writeFile(
       path.join(publicDir, 'index.html'),
       '<!DOCTYPE html><html><head><title>API Server</title></head><body><h1>API Server</h1><p>This is an API server.</p></body></html>'
     );
@@ -78,46 +68,42 @@ async function build() {
     console.log('Compiling TypeScript...');
     execSync('pnpm tsc', { stdio: 'inherit' });
 
-    // Copy the original TypeScript files alongside compiled JavaScript files
-    // This is important for the NodeNext module resolution strategy
-    console.log('Copying source files...');
+    // Copy the compiled JavaScript files and type definitions
+    console.log('Copying compiled files...');
     
-    // Copy API directory with all subdirectories
+    // Copy API directory with .js and .d.ts files
     const apiSrc = path.join(__dirname, 'api');
     const apiDest = path.join(outputDir, 'api');
-    await copySourceWithExtension(apiSrc, apiDest);
+    await copyFilesWithExtensions(apiSrc, apiDest, ['.js', '.d.ts']);
     
-    // Copy services directory
+    // Copy services directory with .js and .d.ts files
     console.log('Copying services...');
     const servicesSrc = path.join(__dirname, 'services');
     const servicesDest = path.join(outputDir, 'services');
     
     if (fs.existsSync(servicesSrc)) {
-      await copySourceWithExtension(servicesSrc, servicesDest);
+      await copyFilesWithExtensions(servicesSrc, servicesDest, ['.js', '.d.ts']);
     }
     
-    // Copy package.json to ensure proper module resolution
-    const packageJsonPath = path.join(__dirname, 'package.json');
-    if (fs.existsSync(packageJsonPath)) {
-      await copyFile(packageJsonPath, path.join(outputDir, 'package.json'));
-      console.log('Copied package.json');
-    }
+    // Copy package files with proper configuration
+    await copyPackageFiles();
     
-    // Copy tsconfig.json to ensure consistent TypeScript settings
-    const tsconfigPath = path.join(__dirname, 'tsconfig.json');
-    if (fs.existsSync(tsconfigPath)) {
-      await copyFile(tsconfigPath, path.join(outputDir, 'tsconfig.json'));
-      console.log('Copied tsconfig.json');
-    }
-    
-    // Copy artifacts if they exist
-    const artifactsSrc = path.join(__dirname, 'api', 'artifacts');
-    const artifactsDest = path.join(outputDir, 'api', 'artifacts');
-    if (fs.existsSync(artifactsSrc)) {
-      await copySourceWithExtension(artifactsSrc, artifactsDest);
+    // Copy any other necessary files (like .env, etc.)
+    const envPath = path.join(__dirname, '.env');
+    if (fs.existsSync(envPath)) {
+      await copyFile(envPath, path.join(outputDir, '.env'));
+      console.log('Copied .env file');
     }
 
-    console.log('Build completed successfully');
+    // Copy artifacts if they exist
+    const artifactsSrc = path.join(__dirname, 'api', 'artifacts');
+    if (fs.existsSync(artifactsSrc)) {
+      const artifactsDest = path.join(outputDir, 'api', 'artifacts');
+      await copyFilesWithExtensions(artifactsSrc, artifactsDest, ['.json']);
+      console.log('Copied artifacts directory');
+    }
+
+    console.log('Build completed successfully!');
   } catch (error) {
     console.error('Build failed:', error);
     process.exit(1);
