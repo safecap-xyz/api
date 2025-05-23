@@ -14,10 +14,11 @@
     "forceConsistentCasingInFileNames": true,
     "allowSyntheticDefaultImports": true,
     "isolatedModules": true,
-    "baseUrl": ".",
-    "paths": {
+    "baseUrl": "./",
+  "paths": {
       "@/*": ["api/*"],
-      "@services/*": ["services/*"]
+      "@services/*": ["services/*"],
+      "@services": ["services"]
     },
     "allowJs": true,
     "checkJs": false,
