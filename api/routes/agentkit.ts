@@ -1,7 +1,8 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { agentKitService } from '../../services/agentKitService.js';
+// TODO: Import agentKitService when implementing actual AgentKit functionality
+// import { agentKitService } from '../../services/agentKitService.js';
 import { handleError } from '../utils/error-handler.js';
-import { 
+import {
   SampleUserOperationRequest,
   AgentKitAccountInfo,
   AgentKitExecuteRequest
@@ -11,7 +12,7 @@ export default async function(app: FastifyInstance) {
   // Flag to track if AgentKit is initialized
   // This would be determined during app startup in a real implementation
   let agentKitInitialized = false;
-  
+
   try {
     // Attempt to initialize the AgentKit service
     agentKitInitialized = true;
@@ -26,9 +27,9 @@ export default async function(app: FastifyInstance) {
       const { network = 'base-sepolia', type = 'evm' } = req.body;
 
       if (!agentKitInitialized) {
-        return reply.status(503).send({ 
-          error: 'AgentKit service is not initialized', 
-          details: 'Please check the environment variables for CDP credentials' 
+        return reply.status(503).send({
+          error: 'AgentKit service is not initialized',
+          details: 'Please check the environment variables for CDP credentials'
         });
       }
 
@@ -54,9 +55,9 @@ export default async function(app: FastifyInstance) {
       const { ownerAddress, smartAccountAddress } = req.body;
 
       if (!agentKitInitialized) {
-        return reply.status(503).send({ 
-          error: 'AgentKit service is not initialized', 
-          details: 'Please check the environment variables for CDP credentials' 
+        return reply.status(503).send({
+          error: 'AgentKit service is not initialized',
+          details: 'Please check the environment variables for CDP credentials'
         });
       }
 
@@ -80,9 +81,9 @@ export default async function(app: FastifyInstance) {
       const { action, params } = req.body;
 
       if (!agentKitInitialized) {
-        return reply.status(503).send({ 
-          error: 'AgentKit service is not initialized', 
-          details: 'Please check the environment variables for CDP credentials' 
+        return reply.status(503).send({
+          error: 'AgentKit service is not initialized',
+          details: 'Please check the environment variables for CDP credentials'
         });
       }
 
@@ -93,7 +94,7 @@ export default async function(app: FastifyInstance) {
         params: params || {},
         status: 'executed'
       };
-      
+
       return reply.send({
         success: true,
         result
