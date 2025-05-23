@@ -63,8 +63,8 @@ try {
       mkdirSync(servicesDest, { recursive: true });
     }
     
-    // Copy all .js files from the source services directory
-    const serviceFiles = readdirSync(servicesSrc).filter(file => file.endsWith('.js'));
+    // Copy all .js, .ts, and .d.ts files from the source services directory
+    const serviceFiles = readdirSync(servicesSrc).filter(file => file.endsWith('.js') || file.endsWith('.ts') || file.endsWith('.d.ts'));
     
     for (const file of serviceFiles) {
       const srcPath = join(servicesSrc, file);
@@ -72,18 +72,6 @@ try {
       
       if (existsSync(srcPath)) {
         console.log(`  Copying ${file}...`);
-        cpSync(srcPath, destPath);
-      }
-    }
-    
-    // Also copy any .d.ts files for type definitions
-    const typeFiles = readdirSync(servicesSrc).filter(file => file.endsWith('.d.ts'));
-    for (const file of typeFiles) {
-      const srcPath = join(servicesSrc, file);
-      const destPath = join(servicesDest, file);
-      
-      if (existsSync(srcPath)) {
-        console.log(`  Copying type definition ${file}...`);
         cpSync(srcPath, destPath);
       }
     }
