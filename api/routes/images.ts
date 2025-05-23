@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { Client } from "@gradio/client";
+// TODO: Re-enable when @gradio/client installation issue is resolved
+// import { Client } from "@gradio/client";
 import { handleError } from '../utils/error-handler.js';
 import { GenerateImageRequest, GenerateImageResponse } from '../types/index.js';
 
@@ -26,6 +27,16 @@ export default async function(app: FastifyInstance) {
     } = req.body;
 
     try {
+      console.log('Image generation endpoint called, but Gradio client is temporarily disabled');
+
+      // TODO: Re-enable when @gradio/client installation issue is resolved
+      return reply.status(503).send({
+        error: 'Image generation service is temporarily unavailable',
+        message: 'The Gradio client dependency is being updated. Please try again later.',
+        success: false
+      });
+
+      /* Original implementation - to be restored when Gradio client is fixed
       console.log('Generating image with:', {
         prompt,
         seed,
@@ -74,6 +85,7 @@ export default async function(app: FastifyInstance) {
       };
 
       return reply.send(response);
+      */
     } catch (error) {
       handleError(error, reply);
     }
