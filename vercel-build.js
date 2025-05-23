@@ -43,9 +43,6 @@ try {
   // First, ensure the output directory structure exists
   const compiledOutputDir = join(__dirname, '.vercel', 'output', 'functions', 'api');
   
-  // Compile TypeScript files
-  execSync('pnpm tsc --outDir .vercel/output/functions/api', { stdio: 'inherit' });
-  
   // Copy the services directory to the output
   const servicesSrc = join(__dirname, 'services');
   const servicesDest = join(compiledOutputDir, 'services');
