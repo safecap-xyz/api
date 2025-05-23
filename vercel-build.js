@@ -46,8 +46,11 @@ async function copySourceWithExtension(src, dest) {
       if (entry.isDirectory()) {
         await copySourceWithExtension(srcPath, destPath);
       } else {
-        await copyFile(srcPath, destPath);
-        console.log(`Copied: ${srcPath} -> ${destPath}`);
+        // Copy both .ts and .js files to ensure proper module resolution
+        if (entry.name.endsWith('.ts') || entry.name.endsWith('.js') || entry.name.endsWith('.d.ts')) {
+          await copyFile(srcPath, destPath);
+          console.log(`Copied: ${srcPath} -> ${destPath}`);
+        }
       }
     }
   } catch (error) {
@@ -91,6 +94,20 @@ async function build() {
     
     if (fs.existsSync(servicesSrc)) {
       await copySourceWithExtension(servicesSrc, servicesDest);
+    }
+    
+    // Copy package.json to ensure proper module resolution
+    const packageJsonPath = path.join(__dirname, 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      await copyFile(packageJsonPath, path.join(outputDir, 'package.json'));
+      console.log('Copied package.json');
+    }
+    
+    // Copy tsconfig.json to ensure consistent TypeScript settings
+    const tsconfigPath = path.join(__dirname, 'tsconfig.json');
+    if (fs.existsSync(tsconfigPath)) {
+      await copyFile(tsconfigPath, path.join(outputDir, 'tsconfig.json'));
+      console.log('Copied tsconfig.json');
     }
     
     // Copy artifacts if they exist

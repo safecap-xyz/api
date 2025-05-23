@@ -32,6 +32,7 @@ interface MastraToolMessage {
   role: 'tool';
   tool_call_id: string;
   content: string;
+  name?: string;
 }
 
 type MastraMessage = MastraUserMessage | MastraAssistantMessage | MastraToolMessage;
@@ -46,9 +47,8 @@ interface AgentMessage {
 }
 
 // Define the expected response type from Mastra API
-
-interface MastraMessage {
-  role: string;
+interface MastraResponse {
+  role: 'assistant';
   content: string;
   model?: string;
   tool_calls?: ToolCall[];
@@ -173,7 +173,7 @@ export class MastraService {
    * @returns The agent's response
    */
   // Helper function to handle tool calls
-  private async handleToolCalls(toolCalls: any[]): Promise<MastraToolMessage[]> {
+  private async handleToolCalls(toolCalls: ToolCall[]): Promise<MastraToolMessage[]> {
     const toolResults: MastraToolMessage[] = [];
 
     console.log('\n🔧 === TOOL CALLS HANDLER INVOKED ===');
@@ -308,7 +308,7 @@ export class MastraService {
    */
   async sendMessageWithConversation(
     agentId: string,
-    messages: MastraMessage[],
+    messages: (MastraUserMessage | MastraAssistantMessage | MastraToolMessage)[],
     taskId: string = crypto.randomUUID()
   ): Promise<ServiceResponse<AgentMessage>> {
     try {
@@ -493,15 +493,25 @@ export class MastraService {
         hasChoicesNested: !!responseData.data?.choices,
         choicesUsed: choices ? 'found' : 'not found'
       });
-      console.log('Message from assistant:', JSON.stringify(msgFromAssistant, null, 2));
-      console.log('Has tool_calls property:', !!msgFromAssistant?.tool_calls);
-      console.log('Tool calls length:', msgFromAssistant?.tool_calls?.length);
-      console.log('Tool calls array:', msgFromAssistant?.tool_calls);
-      console.log('==============================\n');
+      if (!msgFromAssistant) {
+        throw new Error('No message received from assistant');
+      }
 
-      if (msgFromAssistant?.tool_calls?.length) {
+      console.log('Message from assistant:', JSON.stringify(msgFromAssistant, null, 2));
+      
+      // Check if this is an assistant message with tool calls
+      if (msgFromAssistant.role === 'assistant' && 'tool_calls' in msgFromAssistant) {
+        const assistantMsg = msgFromAssistant as MastraAssistantMessage;
+        
+        if (!assistantMsg.tool_calls || !Array.isArray(assistantMsg.tool_calls) || assistantMsg.tool_calls.length === 0) {
+          console.log('No valid tool calls found');
+          throw new Error('No valid tool calls found');
+        }
+        
         console.log('✅ Tool calls detected, processing...');
-        const toolCallResults = await this.handleToolCalls(msgFromAssistant.tool_calls);
+        console.log('Tool calls array:', assistantMsg.tool_calls);
+        
+        const toolCallResults = await this.handleToolCalls(assistantMsg.tool_calls);
 
         // If we have tool results, send them back to the agent
         if (toolCallResults.length > 0) {
@@ -509,17 +519,17 @@ export class MastraService {
           console.log('🔧 Building proper conversation with assistant message + tool results');
 
           // Build the complete conversation including the assistant message with tool_calls
-          const conversationWithToolResults = [
+          const conversationWithToolResults: MastraMessage[] = [
             {
               role: 'user',
-              content: message,
-            },
+              content: message
+            } as MastraUserMessage,
             // Include the assistant message that made the tool calls
             {
               role: 'assistant',
               content: msgFromAssistant.content || '',
               tool_calls: msgFromAssistant.tool_calls
-            },
+            } as MastraAssistantMessage,
             // Add all tool results
             ...toolCallResults
           ];

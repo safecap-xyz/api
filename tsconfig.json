@@ -19,13 +19,14 @@
       "@services/*": ["services/*"]
     },
     "allowJs": true,
-    "checkJs": false
+    "checkJs": false,
+    "verbatimModuleSyntax": false
   },
   "ts-node": {
     "esm": true,
     "experimentalSpecifierResolution": "node",
     "transpileOnly": true
   },
-  "include": ["api/**/*.ts", "api/**/*.d.ts", "services/**/*.ts"],
+  "include": ["api/**/*.ts", "api/**/*.d.ts", "services/**/*.ts", "api/**/*.js"],
   "exclude": ["node_modules", "dist"]
 }
