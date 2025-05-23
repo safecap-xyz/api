@@ -46,37 +46,45 @@ try {
   // Compile TypeScript files
   execSync('pnpm tsc --outDir .vercel/output/functions/api', { stdio: 'inherit' });
   
-  // Create the services directory in the output if it doesn't exist
+  // Copy the services directory to the output
+  const servicesSrc = join(__dirname, 'services');
   const servicesDest = join(compiledOutputDir, 'services');
+  
+  // Create the services directory in the output if it doesn't exist
   if (!existsSync(servicesDest)) {
     mkdirSync(servicesDest, { recursive: true });
   }
   
-  // Copy the compiled JavaScript files from services
-  const servicesSrc = join(__dirname, 'services');
   if (existsSync(servicesSrc)) {
-    console.log(`Copying compiled services...`);
+    console.log(`Copying services directory to ${servicesDest}...`);
     
-    // Get all .ts files in the services directory
-    const serviceFiles = readdirSync(servicesSrc).filter(file => file.endsWith('.ts'));
+    // Ensure the destination directory exists
+    if (!existsSync(servicesDest)) {
+      mkdirSync(servicesDest, { recursive: true });
+    }
     
-    // For each TypeScript file, copy the corresponding .js file from the output
+    // Copy all .js files from the source services directory
+    const serviceFiles = readdirSync(servicesSrc).filter(file => file.endsWith('.js'));
+    
     for (const file of serviceFiles) {
-      const jsFile = file.replace(/\.ts$/, '.js');
-      const srcPath = join(compiledOutputDir, 'services', jsFile);
-      const destPath = join(apiOutputDir, 'services', jsFile);
+      const srcPath = join(servicesSrc, file);
+      const destPath = join(servicesDest, file);
       
-      // Ensure the destination directory exists
-      if (!existsSync(dirname(destPath))) {
-        mkdirSync(dirname(destPath), { recursive: true });
-      }
-      
-      // Only copy if source and destination are different
-      if (srcPath !== destPath && existsSync(srcPath)) {
-        console.log(`  Copying ${jsFile} to ${destPath}...`);
+      if (existsSync(srcPath)) {
+        console.log(`  Copying ${file}...`);
         cpSync(srcPath, destPath);
-      } else if (!existsSync(srcPath)) {
-        console.error(`  Warning: Compiled file not found: ${srcPath}`);
+      }
+    }
+    
+    // Also copy any .d.ts files for type definitions
+    const typeFiles = readdirSync(servicesSrc).filter(file => file.endsWith('.d.ts'));
+    for (const file of typeFiles) {
+      const srcPath = join(servicesSrc, file);
+      const destPath = join(servicesDest, file);
+      
+      if (existsSync(srcPath)) {
+        console.log(`  Copying type definition ${file}...`);
+        cpSync(srcPath, destPath);
       }
     }
   }

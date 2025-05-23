@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { mastraService } from '@services/mastraService.js';
+import { mastraService } from '../../services/mastraService.js';
 import { setupSSE, sendEvent } from '../utils/sse.js';
 import { handleError } from '../utils/error-handler.js';
 import { OrchestrateRequest } from '../types/requests.js';

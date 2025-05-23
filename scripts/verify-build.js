@@ -19,7 +19,7 @@ if (!existsSync(outputDir)) {
 const requiredFiles = [
   'index.js',
   'api/index.js',
-  'api/services/mastraService.js'
+  'services/mastraService.js'  // Updated path to check in the root of the output
 ];
 
 let allFilesExist = true;

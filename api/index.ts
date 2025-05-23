@@ -22,7 +22,7 @@ import { readFile } from 'fs/promises';
 import { registerRoutes } from './routes/index.js';
 
 // Import services
-import { mastraService } from '@services/mastraService.js';
+import { mastraService } from '../services/mastraService.js';
 
 // Type definitions
 type NetworkType = 'base-sepolia' | 'ethereum-sepolia';  // Only include supported networks
