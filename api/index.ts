@@ -18,6 +18,56 @@ import { Client } from "@gradio/client";
 import { ethers } from 'ethers';
 import { readFile } from 'fs/promises';
 
+// Import route registrars
+import { registerRoutes } from './routes/index.js';
+
+// Import services
+import { mastraService } from '../services/mastraService.js';
+
+// Type definitions
+type NetworkType = 'base-sepolia' | 'ethereum-sepolia';  // Only include supported networks
+
+interface NetworkConfig {
+  rpcUrl: string;
+  blockExplorerUrl: string;
+  chainId: number;
+}
+
+type NetworkConfigs = Record<string, NetworkConfig>;
+
+interface Campaign {
+  id: string;
+  title: string;
+  description: string;
+  goal: number;
+  raised: number;
+  creator: string;
+  backers: number;
+  deadline: string;
+}
+
+interface CreateWalletRequest {
+  type: string;
+  name: string;
+  network?: NetworkType;
+}
+
+interface CreateSmartAccountRequest {
+  ownerAddress: string;
+  network?: NetworkType;
+}
+
+interface CreateSmartAccountResponse {
+  smartAccountAddress: string;
+  ownerAddress: string;
+  network: string;
+}
+
+interface ErrorResponse {
+  error: string;
+  details?: unknown;
+}
+
 // Debug current working directory
 console.log('Current working directory:', process.cwd());
 
@@ -76,30 +126,8 @@ if (missingVars.length > 0) {
 
 import { join } from 'path';
 
-// ... existing code ...
-
-// Network configuration
-interface NetworkConfig {
-  rpcUrl: string;
-  blockExplorerUrl: string;
-  chainId: number;
-}
-
-interface NetworkConfigs {
-  [key: string]: NetworkConfig;
-}
-
-// Campaign interface
-interface Campaign {
-  id: string;
-  title: string;
-  description: string;
-  goal: number;
-  raised: number;
-  creator: string;
-  backers: number;
-  deadline: string;
-}
+// Network and configuration types are already defined at the top of the file
+// No need to redefine them here
 
 // User Operation Request interface
 interface UserOperationRequest {
@@ -109,9 +137,7 @@ interface UserOperationRequest {
   ownerAddress?: string;
 }
 
-// ... existing code ...
-
-// Use Fastify's default logger with minimal configuration
+// Initialize Fastify with TypeScript support
 const app: FastifyInstance = Fastify({
   logger: {
     level: process.env.LOG_LEVEL || 'info',
@@ -137,6 +163,37 @@ const app: FastifyInstance = Fastify({
 
 // Log startup information
 app.log.info(`Starting in ${process.env.NODE_ENV === 'development' ? 'development' : 'production'} mode`);
+
+// Initialize services
+app.decorate('mastraService', mastraService);
+
+// Register routes
+registerRoutes(app);
+
+// Health check endpoint
+app.get('/health', async () => {
+  return { status: 'ok', timestamp: new Date().toISOString() };
+});
+
+// Error handler
+app.setErrorHandler((error, request, reply) => {
+  request.log.error(error);
+  
+  if (error.validation) {
+    return reply.status(400).send({
+      statusCode: 400,
+      error: 'Bad Request',
+      message: error.message,
+      validation: error.validation
+    });
+  }
+  
+  reply.status(500).send({
+    statusCode: 500,
+    error: 'Internal Server Error',
+    message: 'An unexpected error occurred'
+  });
+});
 
 // Declare custom properties for fastify instance
 declare module 'fastify' {
@@ -363,7 +420,7 @@ app.post<{ Body: GenerateImageRequest }>('/api/generate-image', async (req, repl
 });
 
 // Network types supported by CDP SDK
-type NetworkType = 'base-sepolia' | 'ethereum-sepolia';
+// NetworkType is already defined at the top of the file
 
 interface CreateWalletRequest {
   type: string;
@@ -383,7 +440,6 @@ interface CreateSmartAccountResponse {
   network: string;
 }
 
-// CDP Wallet Toolkit API Routes
 app.post<{ Body: CreateSmartAccountRequest }>('/api/create-smart-account', async (req, reply) => {
   const { ownerAddress, network = 'base-sepolia' } = req.body;
 
@@ -656,11 +712,6 @@ const startServer = async (): Promise<string> => {
     // Register CORS with the configured options - this will handle OPTIONS requests automatically
     await app.register(fastifyCors, corsOptions);
 
-    // Health check endpoint
-    app.get('/health', async () => {
-      return { status: 'ok', timestamp: new Date().toISOString() };
-    });
-
     // Log startup information
     console.log(`Starting server in ${process.env.NODE_ENV === 'development' ? 'development' : 'production'} mode`);
     console.log('Environment variables loaded:', Object.keys(process.env).filter(key => 
@@ -703,7 +754,7 @@ const startServer = async (): Promise<string> => {
 };
 
 // Only start the server if this file is run directly
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && import.meta.url === `file://${process.argv[1]}`) {
   startServer()
     .catch(error => {
       console.error('Failed to start server:', error);
