@@ -15,14 +15,20 @@
     "isolatedModules": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["api/*"]
-    }
+      "@/*": ["api/*"],
+      "@services/*": ["services/*"]
+    },
+    "allowJs": true,
+    "checkJs": false,
+    "verbatimModuleSyntax": false,
+    "noEmit": false,
+    "emitDeclarationOnly": false
   },
   "ts-node": {
     "esm": true,
     "experimentalSpecifierResolution": "node",
     "transpileOnly": true
   },
-  "include": ["api/**/*.ts", "api/**/*.d.ts"],
-  "exclude": ["node_modules", "dist", ".vercel"]
+  "include": ["api/**/*.ts", "api/**/*.d.ts", "services/**/*.ts", "services/**/*.d.ts"],
+  "exclude": ["node_modules", "dist"]
 }

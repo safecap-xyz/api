@@ -3,7 +3,10 @@
   "builds": [
     {
       "src": "api/index.ts",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "maxLambdaSize": "50mb"
+      }
     }
   ],
   "headers": [
@@ -21,5 +24,16 @@
   "rewrites": [
     { "source": "/(.*)", "destination": "/api" }
   ],
-  "outputDirectory": ".vercel/output"
+  "outputDirectory": ".vercel/output",
+  "env": {
+    "ONNX_DISABLE_BACKEND": "1",
+    "SKIP_ONNXRUNTIME_POSTINSTALL": "1"
+  },
+  "build": {
+    "env": {
+      "ONNX_DISABLE_BACKEND": "1",
+      "SKIP_ONNXRUNTIME_POSTINSTALL": "1",
+      "NODE_OPTIONS": "--max-old-space-size=4096"
+    }
+  }
 }
